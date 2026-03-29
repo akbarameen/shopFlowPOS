@@ -17,7 +17,7 @@ class PosRepositoryImpl(private val db: DatabaseProvider) : PosRepository {
 
     override suspend fun getAllProducts(): AppResult<List<Product>> = withContext(Dispatchers.Default) {
         try {
-            val rows = db.productQueries.getAllActive().executeAsList()
+            val rows = db.productQueries.getAllActive(limit = 100, offset = 0).executeAsList()
             AppResult.Success(rows.map { r ->
                 Product(
                     id = r.id,
@@ -46,7 +46,11 @@ class PosRepositoryImpl(private val db: DatabaseProvider) : PosRepository {
 
     override suspend fun searchProducts(query: String): AppResult<List<Product>> = withContext(Dispatchers.Default) {
         try {
-            val rows = db.productQueries.searchByName(query, query, query, query).executeAsList()
+            val rows = db.productQueries.searchProducts(
+                query = query,
+                limit = 50,
+                offset = 0
+            ).executeAsList()
             AppResult.Success(rows.map { r ->
                 Product(
                     id = r.id,

@@ -1,171 +1,236 @@
 package com.matechmatrix.shopflowpos.feature.inventory.presentation
 
+import androidx.lifecycle.viewModelScope
+import androidx.paging.cachedIn
 import com.matechmatrix.shopflowpos.core.common.base.MviViewModel
 import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.common.util.IdGenerator
 import com.matechmatrix.shopflowpos.core.model.Product
 import com.matechmatrix.shopflowpos.core.model.enums.ProductCategory
 import com.matechmatrix.shopflowpos.core.model.enums.ProductCondition
-import com.matechmatrix.shopflowpos.feature.inventory.domain.repository.InventoryRepository
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.DeleteProductUseCase
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.GetInventorySettingsUseCase
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.GetLowStockProductsUseCase
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.GetPagedProductsUseCase
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.SaveProductUseCase
+import com.matechmatrix.shopflowpos.feature.inventory.domain.usecase.UpdateStockUseCase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.datetime.Clock
 
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class InventoryViewModel(
-    private val repo: InventoryRepository
+    private val getPagedProducts    : GetPagedProductsUseCase,
+    private val getLowStock         : GetLowStockProductsUseCase,
+    private val getSettings         : GetInventorySettingsUseCase,
+    private val saveProduct         : SaveProductUseCase,
+    private val updateStockUseCase  : UpdateStockUseCase,
+    private val deleteProductUseCase: DeleteProductUseCase,
 ) : MviViewModel<InventoryState, InventoryIntent, InventoryEffect>(InventoryState()) {
 
-    init { onIntent(InventoryIntent.Load) }
+    private val searchFlow   = MutableStateFlow("")
+    private val categoryFlow = MutableStateFlow<ProductCategory?>(null)
+
+    init {
+        // Wire paged flow — reacts to search/category changes with debounce
+        combine(
+            searchFlow.debounce(300).distinctUntilChanged(),
+            categoryFlow
+        ) { q, cat -> q to cat }
+            .flatMapLatest { (q, cat) -> getPagedProducts(q, cat).cachedIn(viewModelScope) }
+            .onEach { paged -> setState { copy(pagedProducts = kotlinx.coroutines.flow.flowOf(paged)) } }
+            .launchIn(viewModelScope)
+
+        onIntent(InventoryIntent.Load)
+    }
 
     override suspend fun handleIntent(intent: InventoryIntent) {
         when (intent) {
-            InventoryIntent.Load -> loadProducts()
+
+            InventoryIntent.Load -> loadSettings()
 
             is InventoryIntent.Search -> {
+                searchFlow.value = intent.query
                 setState { copy(searchQuery = intent.query) }
-                applyFilter()
             }
 
             is InventoryIntent.FilterByCategory -> {
+                categoryFlow.value = intent.category
                 setState { copy(selectedCategory = intent.category) }
-                applyFilter()
             }
 
-            InventoryIntent.ShowAddDialog -> setState {
+            // ── Sheet ─────────────────────────────────────────────────────────
+            InventoryIntent.ShowAddSheet -> setState {
                 copy(
-                    showAddDialog = true, editingProduct = null,
-                    formName = "", formBrand = "", formModel = "", formImei = "",
-                    formPtaStatus = "NA", formBarcode = "", formCategory = ProductCategory.PHONE,
-                    formCondition = ProductCondition.NEW, formCostPrice = "", formSalePrice = "",
-                    formStock = "", formLowStockAlert = "5", formDescription = "", formError = null
+                    showProductSheet  = true,
+                    editingProduct    = null,
+                    formName          = "", formBrand       = "", formModel   = "",
+                    formImei          = "", formPtaStatus   = "NA", formBarcode = "",
+                    formCategory      = ProductCategory.PHONE,
+                    formCondition     = ProductCondition.NEW,
+                    formCostPrice     = "", formSalePrice   = "",
+                    formStock         = "1", formLowStockAlert = "3",
+                    formDescription   = "",
+                    formColor         = "", formStorageGb = "", formRamGb = "",
+                    formRomGb         = "", formBatteryMah = "", formScreenSize = "",
+                    formProcessor     = "",
+                    formError         = null,
                 )
             }
 
-            is InventoryIntent.ShowEditDialog -> setState {
+            is InventoryIntent.ShowEditSheet -> {
                 val p = intent.product
-                copy(
-                    showAddDialog = true, editingProduct = p,
-                    formName = p.name, formBrand = p.brand, formModel = p.model,
-                    formImei = p.imei ?: "", formPtaStatus = p.ptaStatus,
-                    formBarcode = p.barcode ?: "",
-                    formCategory = p.category, formCondition = p.condition,
-                    formCostPrice = p.costPrice.toString(), formSalePrice = p.sellingPrice.toString(),
-                    formStock = p.stock.toString(), formLowStockAlert = p.lowStockThreshold.toString(),
-                    formDescription = p.description ?: "", formError = null
-                )
+                setState {
+                    copy(
+                        showProductSheet  = true,
+                        editingProduct    = p,
+                        formName          = p.name,
+                        formBrand         = p.brand,
+                        formModel         = p.model,
+                        formImei          = p.imei ?: "",
+                        formPtaStatus     = p.ptaStatus,
+                        formBarcode       = p.barcode ?: "",
+                        formCategory      = p.category,
+                        formCondition     = p.condition,
+                        formCostPrice     = p.costPrice.toString(),
+                        formSalePrice     = p.sellingPrice.toString(),
+                        formStock         = p.stock.toString(),
+                        formLowStockAlert = p.lowStockThreshold.toString(),
+                        formDescription   = p.description ?: "",
+                        formColor         = p.color ?: "",
+                        formStorageGb     = p.storageGb?.toString() ?: "",
+                        formRamGb         = p.ramGb?.toString() ?: "",
+                        formRomGb         = p.romGb?.toString() ?: "",
+                        formBatteryMah    = p.batteryMah?.toString() ?: "",
+                        formScreenSize    = p.screenSizeInch?.toString() ?: "",
+                        formProcessor     = p.processor ?: "",
+                        formError         = null,
+                    )
+                }
             }
 
-            InventoryIntent.DismissDialog -> setState { copy(showAddDialog = false, editingProduct = null, formError = null) }
+            InventoryIntent.DismissSheet -> setState {
+                copy(showProductSheet = false, editingProduct = null, formError = null)
+            }
 
-            InventoryIntent.SaveProduct -> saveProduct()
+            InventoryIntent.SaveProduct -> doSaveProduct()
 
-            is InventoryIntent.ConfirmDelete -> setState { copy(showDeleteConfirm = intent.productId) }
+            // ── Stock ─────────────────────────────────────────────────────────
+            is InventoryIntent.ShowStockDialog ->
+                setState { copy(showStockDialog = intent.productId.ifBlank { null }) }
+
+            is InventoryIntent.UpdateStock -> {
+                when (val r = updateStockUseCase(intent.productId, intent.newStock)) {
+                    is AppResult.Success -> {
+                        setState { copy(showStockDialog = null) }
+                        setEffect(InventoryEffect.ShowToast("Stock updated"))
+                    }
+                    is AppResult.Error -> setEffect(InventoryEffect.ShowToast(r.message))
+                    else -> {}
+                }
+            }
+
+            // ── Delete ────────────────────────────────────────────────────────
+            is InventoryIntent.ConfirmDelete ->
+                setState { copy(showDeleteConfirm = intent.productId.ifBlank { null }) }
 
             InventoryIntent.DeleteProduct -> {
                 val id = state.value.showDeleteConfirm ?: return
                 setState { copy(showDeleteConfirm = null) }
-                repo.deactivateProduct(id)
-                loadProducts()
-            }
-
-            is InventoryIntent.ShowStockDialog -> setState { copy(showStockDialog = intent.productId) }
-
-            is InventoryIntent.UpdateStock -> {
-                repo.updateStock(intent.productId, intent.newStock)
-                setState { copy(showStockDialog = null) }
-                loadProducts()
-            }
-
-            InventoryIntent.DismissError -> setState { copy(error = null, successMessage = null) }
-
-            // Form field updates
-            is InventoryIntent.FormName        -> setState { copy(formName = intent.v) }
-            is InventoryIntent.FormBrand       -> setState { copy(formBrand = intent.v) }
-            is InventoryIntent.FormModel       -> setState { copy(formModel = intent.v) }
-            is InventoryIntent.FormImei        -> setState { copy(formImei = intent.v) }
-            is InventoryIntent.FormPtaStatus   -> setState { copy(formPtaStatus = intent.v) }
-            is InventoryIntent.FormBarcode     -> setState { copy(formBarcode = intent.v) }
-            is InventoryIntent.FormCategory    -> setState { copy(formCategory = intent.v) }
-            is InventoryIntent.FormCondition   -> setState { copy(formCondition = intent.v) }
-            is InventoryIntent.FormCostPrice   -> setState { copy(formCostPrice = intent.v) }
-            is InventoryIntent.FormSalePrice   -> setState { copy(formSalePrice = intent.v) }
-            is InventoryIntent.FormStock       -> setState { copy(formStock = intent.v) }
-            is InventoryIntent.FormLowStockAlert -> setState { copy(formLowStockAlert = intent.v) }
-            is InventoryIntent.FormDescription -> setState { copy(formDescription = intent.v) }
-        }
-    }
-
-    private suspend fun loadProducts() {
-        setState { copy(isLoading = true) }
-        val showCost = repo.getShowCostPrice()
-        val currency = repo.getCurrencySymbol()
-        when (val r = repo.getAllProducts()) {
-            is AppResult.Success -> {
-                setState {
-                    copy(
-                        isLoading = false, products = r.data,
-                        filteredProducts = applyFilters(r.data, searchQuery, selectedCategory),
-                        showCostPrice = showCost, currencySymbol = currency
-                    )
+                when (val r = deleteProductUseCase(id)) {
+                    is AppResult.Success -> setEffect(InventoryEffect.ShowToast("Product removed"))
+                    is AppResult.Error   -> setEffect(InventoryEffect.ShowToast(r.message))
+                    else -> {}
                 }
             }
-            is AppResult.Error -> setState { copy(isLoading = false, error = r.message) }
-            else -> setState { copy(isLoading = false) }
+
+            // ── Form fields ───────────────────────────────────────────────────
+            is InventoryIntent.FormName         -> setState { copy(formName = intent.v) }
+            is InventoryIntent.FormBrand        -> setState { copy(formBrand = intent.v) }
+            is InventoryIntent.FormModel        -> setState { copy(formModel = intent.v) }
+            is InventoryIntent.FormImei         -> setState { copy(formImei = intent.v) }
+            is InventoryIntent.FormPtaStatus    -> setState { copy(formPtaStatus = intent.v) }
+            is InventoryIntent.FormBarcode      -> setState { copy(formBarcode = intent.v) }
+            is InventoryIntent.FormCategory     -> setState { copy(formCategory = intent.v, formImei = "", formError = null) }
+            is InventoryIntent.FormCondition    -> setState { copy(formCondition = intent.v) }
+            is InventoryIntent.FormCostPrice    -> setState { copy(formCostPrice = intent.v) }
+            is InventoryIntent.FormSalePrice    -> setState { copy(formSalePrice = intent.v) }
+            is InventoryIntent.FormStock        -> setState { copy(formStock = intent.v) }
+            is InventoryIntent.FormLowStockAlert-> setState { copy(formLowStockAlert = intent.v) }
+            is InventoryIntent.FormDescription  -> setState { copy(formDescription = intent.v) }
+            is InventoryIntent.FormColor        -> setState { copy(formColor = intent.v) }
+            is InventoryIntent.FormStorageGb    -> setState { copy(formStorageGb = intent.v) }
+            is InventoryIntent.FormRamGb        -> setState { copy(formRamGb = intent.v) }
+            is InventoryIntent.FormRomGb        -> setState { copy(formRomGb = intent.v) }
+            is InventoryIntent.FormBatteryMah   -> setState { copy(formBatteryMah = intent.v) }
+            is InventoryIntent.FormScreenSize   -> setState { copy(formScreenSize = intent.v) }
+            is InventoryIntent.FormProcessor    -> setState { copy(formProcessor = intent.v) }
         }
     }
 
-    private fun applyFilter() {
-        setState { copy(filteredProducts = applyFilters(products, searchQuery, selectedCategory)) }
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private suspend fun loadSettings() {
+        val settings = getSettings()
+        setState { copy(showCostPrice = settings.showCostPrice, currencySymbol = settings.currencySymbol) }
+        refreshLowStockCount()
     }
 
-    private fun applyFilters(all: List<Product>, query: String, cat: ProductCategory?): List<Product> {
-        return all
-            .filter { if (query.isBlank()) true else it.name.contains(query, ignoreCase = true) || it.barcode?.contains(query) == true }
-            .filter { if (cat == null) true else it.category == cat }
+    private suspend fun refreshLowStockCount() {
+        val r = getLowStock()
+        if (r is AppResult.Success) setState { copy(lowStockCount = r.data.size) }
     }
 
-    private suspend fun saveProduct() {
+    private suspend fun doSaveProduct() {
         val s = state.value
-        if (s.formName.isBlank()) {
-            setState { copy(formError = "Product name is required") }
-            return
-        }
-        val salePrice = s.formSalePrice.toDoubleOrNull()
-        if (salePrice == null || salePrice <= 0) {
-            setState { copy(formError = "Enter a valid sale price") }
-            return
-        }
-        val costPrice = s.formCostPrice.toDoubleOrNull() ?: 0.0
-        val stock     = s.formStock.toIntOrNull() ?: 0
-        val lowAlert  = s.formLowStockAlert.toIntOrNull() ?: 5
+        setState { copy(isSaving = true, formError = null) }
 
+        val isNew   = s.editingProduct == null
         val product = Product(
-            id            = s.editingProduct?.id ?: IdGenerator.generate(),
-            name          = s.formName.trim(),
-            brand         = s.formBrand.trim(),
-            model         = s.formModel.trim(),
-            imei          = s.formImei.takeIf { it.isNotBlank() },
-            barcode       = s.formBarcode.takeIf { it.isNotBlank() },
-            category      = s.formCategory,
-            condition     = s.formCondition,
-            ptaStatus     = s.formPtaStatus,
-            costPrice     = costPrice,
-            sellingPrice  = salePrice,
-            stock         = stock,
-            lowStockThreshold = lowAlert,
-            description   = s.formDescription.takeIf { it.isNotBlank() },
-            isActive      = true,
-            createdAt     = s.editingProduct?.createdAt ?: Clock.System.now().toEpochMilliseconds(),
-            updatedAt     = Clock.System.now().toEpochMilliseconds()
+            id                = s.editingProduct?.id ?: IdGenerator.generate(),
+            name              = s.formName.trim(),
+            brand             = s.formBrand.trim(),
+            model             = s.formModel.trim(),
+            imei              = s.formImei.takeIf { it.isNotBlank() },
+            barcode           = s.formBarcode.takeIf { it.isNotBlank() },
+            category          = s.formCategory,
+            condition         = s.formCondition,
+            ptaStatus         = s.formPtaStatus,
+            costPrice         = s.formCostPrice.toDoubleOrNull() ?: 0.0,
+            sellingPrice      = s.formSalePrice.toDoubleOrNull() ?: 0.0,
+            // IMEI-tracked items always have stock = 1 (one physical unit)
+            stock             = if (s.formCategory.hasImei) 1
+            else s.formStock.toIntOrNull() ?: 0,
+            lowStockThreshold = if (s.formCategory.hasImei) 0
+            else s.formLowStockAlert.toIntOrNull() ?: 3,
+            description       = s.formDescription.takeIf { it.isNotBlank() },
+            isActive          = true,
+            createdAt         = s.editingProduct?.createdAt ?: Clock.System.now().toEpochMilliseconds(),
+            updatedAt         = Clock.System.now().toEpochMilliseconds(),
+            color             = s.formColor.takeIf { it.isNotBlank() },
+            storageGb         = s.formStorageGb.toIntOrNull(),
+            ramGb             = s.formRamGb.toIntOrNull(),
+            romGb             = s.formRomGb.toIntOrNull(),
+            batteryMah        = s.formBatteryMah.toIntOrNull(),
+            screenSizeInch    = s.formScreenSize.toFloatOrNull(),
+            processor         = s.formProcessor.takeIf { it.isNotBlank() },
         )
 
-        val result = if (s.editingProduct != null) repo.updateProduct(product) else repo.insertProduct(product)
-        when (result) {
+        when (val r = saveProduct(product, isNew)) {
             is AppResult.Success -> {
-                setState { copy(showAddDialog = false, editingProduct = null) }
-                setEffect(InventoryEffect.ShowToast(if (s.editingProduct != null) "Product updated" else "Product added"))
-                loadProducts()
+                setState { copy(isSaving = false, showProductSheet = false, editingProduct = null) }
+                setEffect(InventoryEffect.ShowToast(if (isNew) "Product added" else "Product updated"))
+                refreshLowStockCount()
             }
-            is AppResult.Error -> setState { copy(formError = result.message) }
-            else -> {}
+            is AppResult.Error -> setState { copy(isSaving = false, formError = r.message) }
+            else               -> setState { copy(isSaving = false) }
         }
     }
 }

@@ -10,25 +10,61 @@ CREATE TABLE IF NOT EXISTS product (
     low_stock_threshold INTEGER NOT NULL DEFAULT 3,
     condition_type      TEXT    NOT NULL DEFAULT 'NEW',
     category            TEXT    NOT NULL DEFAULT 'PHONE',
-    pta_status          TEXT    NOT NULL DEFAULT 'NA', -- NA, APPROVED, NON_PTA, JV
+    pta_status          TEXT    NOT NULL DEFAULT 'NA',
     image_uri           TEXT,
     barcode             TEXT,
     notes               TEXT,
     is_active           INTEGER NOT NULL DEFAULT 1,
     created_at          INTEGER NOT NULL,
-    updated_at          INTEGER NOT NULL
+    updated_at          INTEGER NOT NULL,
+    -- Spec columns (nullable — only populated for relevant categories)
+    color               TEXT,
+    storage_gb          INTEGER,
+    ram_gb              INTEGER,
+    rom_gb              INTEGER,
+    battery_mah         INTEGER,
+    screen_size_inch    REAL,
+    processor           TEXT
 );
 
+-- ─── Indexes ────────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_product_category   ON product(category, is_active);
+CREATE INDEX IF NOT EXISTS idx_product_stock      ON product(stock, is_active);
+CREATE INDEX IF NOT EXISTS idx_product_updated_at ON product(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_product_imei       ON product(imei) WHERE imei IS NOT NULL;
+
+-- ─── Queries ────────────────────────────────────────────────────────────────
+
 insertProduct:
-INSERT OR REPLACE INTO product
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO product (
+    id, name, brand, model, imei, cost_price, selling_price, stock,
+    low_stock_threshold, condition_type, category, pta_status, image_uri,
+    barcode, notes, is_active, created_at, updated_at, color, storage_gb,
+    ram_gb, rom_gb, battery_mah, screen_size_inch, processor
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateProduct:
 UPDATE product SET
-    name = ?, brand = ?, model = ?, cost_price = ?,
-    selling_price = ?, stock = ?, low_stock_threshold = ?,
-    condition_type = ?, category = ?, pta_status = ?, notes = ?,
-    updated_at = ?
+    name             = ?,
+    brand            = ?,
+    model            = ?,
+    cost_price       = ?,
+    selling_price    = ?,
+    stock            = ?,
+    low_stock_threshold = ?,
+    condition_type   = ?,
+    category         = ?,
+    pta_status       = ?,
+    notes            = ?,
+    color            = ?,
+    storage_gb       = ?,
+    ram_gb           = ?,
+    rom_gb           = ?,
+    battery_mah      = ?,
+    screen_size_inch = ?,
+    processor        = ?,
+    updated_at       = ?
 WHERE id = ?;
 
 updateStock:
@@ -44,29 +80,67 @@ updatePrices:
 UPDATE product SET cost_price = ?, selling_price = ?, updated_at = ? WHERE id = ?;
 
 getAllActive:
-SELECT * FROM product WHERE is_active = 1 ORDER BY updated_at DESC;
+SELECT * FROM product
+WHERE is_active = 1
+  AND (
+    (category IN ('PHONE','TABLET') AND stock > 0)
+    OR category NOT IN ('PHONE','TABLET')
+  )
+ORDER BY updated_at DESC
+LIMIT :limit OFFSET :offset;
+
+countAllActive:
+SELECT COUNT(*) FROM product
+WHERE is_active = 1
+  AND (
+    (category IN ('PHONE','TABLET') AND stock > 0)
+    OR category NOT IN ('PHONE','TABLET')
+  );
 
 getById:
 SELECT * FROM product WHERE id = ?;
 
 getByCategory:
-SELECT * FROM product WHERE category = ? AND is_active = 1 ORDER BY name ASC;
-
-searchByName:
 SELECT * FROM product
-WHERE is_active = 1 AND (
-    name LIKE ('%' || ? || '%') OR
-    brand LIKE ('%' || ? || '%') OR
-    model LIKE ('%' || ? || '%') OR
-    imei LIKE ('%' || ? || '%')
-)
-ORDER BY name ASC;
+WHERE category = ? AND is_active = 1
+  AND (
+    (category IN ('PHONE','TABLET') AND stock > 0)
+    OR category NOT IN ('PHONE','TABLET')
+  )
+ORDER BY name ASC
+LIMIT :limit OFFSET :offset;
+
+searchProducts:
+SELECT * FROM product
+WHERE is_active = 1
+  AND (
+    name      LIKE ('%' || :query || '%') OR
+    brand     LIKE ('%' || :query || '%') OR
+    model     LIKE ('%' || :query || '%') OR
+    imei      LIKE ('%' || :query || '%') OR
+    barcode   LIKE ('%' || :query || '%') OR
+    processor LIKE ('%' || :query || '%')
+  )
+  AND (
+    (category IN ('PHONE','TABLET') AND stock > 0)
+    OR category NOT IN ('PHONE','TABLET')
+  )
+ORDER BY name ASC
+LIMIT :limit OFFSET :offset;
 
 getLowStock:
-SELECT * FROM product WHERE stock <= low_stock_threshold AND is_active = 1;
+SELECT * FROM product
+WHERE stock <= low_stock_threshold
+  AND stock > 0
+  AND is_active = 1
+  AND category NOT IN ('PHONE','TABLET');
 
 softDelete:
 UPDATE product SET is_active = 0, updated_at = ? WHERE id = ?;
+
+-- Mark IMEI item as sold (stock = 0, is_active stays 1 for history)
+markAsSold:
+UPDATE product SET stock = 0, updated_at = ? WHERE id = ?;
 
 countActive:
 SELECT COUNT(*) FROM product WHERE is_active = 1;

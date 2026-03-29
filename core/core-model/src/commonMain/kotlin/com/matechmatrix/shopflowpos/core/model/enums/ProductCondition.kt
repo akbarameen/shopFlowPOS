@@ -6,5 +6,10 @@ import kotlinx.serialization.Serializable
 enum class ProductCondition {
     NEW,
     USED,
-    REFURBISHED
+    REFURBISHED,
+    LIKE_NEW,
+    GOOD,
+    FAIR
+
+
 }

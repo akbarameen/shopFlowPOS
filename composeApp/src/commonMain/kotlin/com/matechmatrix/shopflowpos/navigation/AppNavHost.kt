@@ -71,7 +71,7 @@ fun AppNavHost(
         composable(AppRoute.Inventory.route) {
             InventoryScreen(
                 windowSize    = windowSize,
-//                navigateChild = navigateChild
+                navigateChild = navigateChild
             )
         }
 

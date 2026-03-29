@@ -27,6 +27,7 @@ runner = "1.7.0"
 core = "1.7.0"
 compose-icons = "1.7.3"
 material3WindowSizeClass = "1.4.0"
+paging = "3.4.2"
 
 [libraries]
 # ─── Existing ────────────────────────────────────────────────────────────────
@@ -95,6 +96,9 @@ androidx-runner = { group = "androidx.test", name = "runner", version.ref = "run
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 androidx-material3-window-size-class1 = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSizeClass" }
 
+paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
+paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
+
 [plugins]
 # ─── Existing ────────────────────────────────────────────────────────────────
 androidApplication  = { id = "com.android.application",                   version.ref = "agp" }
@@ -107,4 +111,5 @@ kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform",        versio
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sqldelight          = { id = "app.cash.sqldelight",                       version.ref = "sqldelight" }
 androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+androidKotlinMultiplatform = { id = "com.android.kotlin.multiplatform", version.ref = "agp" }
 androidLint = { id = "com.android.lint", version.ref = "agp" }
