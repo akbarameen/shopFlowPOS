@@ -1,0 +1,24 @@
+CREATE TABLE IF NOT EXISTS supplier (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    name        TEXT    NOT NULL,
+    phone       TEXT    NOT NULL DEFAULT '',
+    address     TEXT    NOT NULL DEFAULT '',
+    email       TEXT    NOT NULL DEFAULT '',
+    notes       TEXT,
+    created_at  INTEGER NOT NULL
+);
+
+insertSupplier:
+INSERT INTO supplier VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateSupplier:
+UPDATE supplier SET name = ?, phone = ?, address = ?, email = ?, notes = ? WHERE id = ?;
+
+getAllSuppliers:
+SELECT * FROM supplier ORDER BY name ASC;
+
+getSupplierById:
+SELECT * FROM supplier WHERE id = ?;
+
+deleteSupplier:
+DELETE FROM supplier WHERE id = ?;

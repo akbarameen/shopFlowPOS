@@ -1,0 +1,85 @@
+CREATE TABLE IF NOT EXISTS cash_account (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    name        TEXT    NOT NULL DEFAULT 'Cash in Hand',
+    balance     REAL    NOT NULL DEFAULT 0.0,
+    updated_at  INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bank_account (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    bank_name       TEXT    NOT NULL,
+    account_title   TEXT    NOT NULL,
+    account_number  TEXT    NOT NULL,
+    balance         REAL    NOT NULL DEFAULT 0.0,
+    updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ledger_entry (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    type            TEXT    NOT NULL,
+    amount          REAL    NOT NULL,
+    account_type    TEXT    NOT NULL,
+    bank_account_id TEXT,
+    reference_id    TEXT,
+    description     TEXT    NOT NULL,
+    balance_after   REAL    NOT NULL,
+    created_at      INTEGER NOT NULL
+);
+
+-- Cash account queries
+getCashAccount:
+SELECT * FROM cash_account WHERE id = 'default_cash';
+
+getCashBalance:
+SELECT COALESCE((SELECT balance FROM cash_account WHERE id = 'default_cash'), 0.0);
+
+updateCashBalance:
+INSERT OR REPLACE INTO cash_account (id, name, balance, updated_at)
+VALUES ('default_cash', 'Cash in Hand', ?, ?);
+
+initCashAccount:
+INSERT OR IGNORE INTO cash_account (id, name, balance, updated_at)
+VALUES ('default_cash', 'Cash in Hand', ?, ?);
+
+-- Bank account queries
+insertBankAccount:
+INSERT INTO bank_account VALUES (?, ?, ?, ?, ?, ?);
+
+getAllBankAccounts:
+SELECT * FROM bank_account ORDER BY bank_name ASC;
+
+getBankAccountById:
+SELECT * FROM bank_account WHERE id = ?;
+
+updateBankBalance:
+UPDATE bank_account SET balance = ?, updated_at = ? WHERE id = ?;
+
+updateBankAccount:
+UPDATE bank_account SET bank_name = ?, account_title = ?, account_number = ? WHERE id = ?;
+
+deleteBankAccount:
+DELETE FROM bank_account WHERE id = ?;
+
+getTotalBankBalance:
+SELECT COALESCE(SUM(balance), 0.0) FROM bank_account;
+
+-- Ledger queries
+insertLedgerEntry:
+INSERT INTO ledger_entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+getLedgerByDateRange:
+SELECT * FROM ledger_entry
+WHERE created_at BETWEEN ? AND ?
+ORDER BY created_at DESC;
+
+getLedgerByCashAccount:
+SELECT * FROM ledger_entry
+WHERE account_type = 'CASH'
+ORDER BY created_at DESC
+LIMIT ?;
+
+getLedgerByBankAccount:
+SELECT * FROM ledger_entry
+WHERE account_type = 'BANK' AND bank_account_id = ?
+ORDER BY created_at DESC
+LIMIT ?;

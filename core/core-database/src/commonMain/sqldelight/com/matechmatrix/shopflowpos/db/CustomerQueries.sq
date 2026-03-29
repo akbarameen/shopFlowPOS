@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS customer (
+    id                  TEXT    NOT NULL PRIMARY KEY,
+    name                TEXT    NOT NULL,
+    phone               TEXT    NOT NULL DEFAULT '',
+    cnic                TEXT,
+    address             TEXT    NOT NULL DEFAULT '',
+    notes               TEXT,
+    total_purchases     REAL    NOT NULL DEFAULT 0.0,
+    total_transactions  INTEGER NOT NULL DEFAULT 0,
+    created_at          INTEGER NOT NULL
+);
+
+insertCustomer:
+INSERT INTO customer VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateCustomer:
+UPDATE customer SET name = ?, phone = ?, cnic = ?, address = ?, notes = ? WHERE id = ?;
+
+updateCustomerStats:
+UPDATE customer SET
+    total_purchases = total_purchases + ?,
+    total_transactions = total_transactions + 1
+WHERE id = ?;
+
+getAllCustomers:
+SELECT * FROM customer ORDER BY name ASC;
+
+getCustomerById:
+SELECT * FROM customer WHERE id = ?;
+
+searchCustomers:
+SELECT * FROM customer
+WHERE name LIKE ('%' || ? || '%') OR phone LIKE ('%' || ? || '%') OR cnic LIKE ('%' || ? || '%')
+ORDER BY name ASC;
+
+deleteCustomer:
+DELETE FROM customer WHERE id = ?;

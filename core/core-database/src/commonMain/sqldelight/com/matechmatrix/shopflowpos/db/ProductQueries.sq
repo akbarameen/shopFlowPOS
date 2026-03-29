@@ -1,0 +1,78 @@
+CREATE TABLE IF NOT EXISTS product (
+    id                  TEXT    NOT NULL PRIMARY KEY,
+    name                TEXT    NOT NULL,
+    brand               TEXT    NOT NULL DEFAULT '',
+    model               TEXT    NOT NULL DEFAULT '',
+    imei                TEXT,
+    cost_price          REAL    NOT NULL DEFAULT 0.0,
+    selling_price       REAL    NOT NULL DEFAULT 0.0,
+    stock               INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 3,
+    condition_type      TEXT    NOT NULL DEFAULT 'NEW',
+    category            TEXT    NOT NULL DEFAULT 'PHONE',
+    pta_status          TEXT    NOT NULL DEFAULT 'NA', -- NA, APPROVED, NON_PTA, JV
+    image_uri           TEXT,
+    barcode             TEXT,
+    notes               TEXT,
+    is_active           INTEGER NOT NULL DEFAULT 1,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+);
+
+insertProduct:
+INSERT OR REPLACE INTO product
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateProduct:
+UPDATE product SET
+    name = ?, brand = ?, model = ?, cost_price = ?,
+    selling_price = ?, stock = ?, low_stock_threshold = ?,
+    condition_type = ?, category = ?, pta_status = ?, notes = ?,
+    updated_at = ?
+WHERE id = ?;
+
+updateStock:
+UPDATE product SET stock = ?, updated_at = ? WHERE id = ?;
+
+decrementStock:
+UPDATE product SET stock = MAX(0, stock - ?), updated_at = ? WHERE id = ?;
+
+incrementStock:
+UPDATE product SET stock = stock + ?, updated_at = ? WHERE id = ?;
+
+updatePrices:
+UPDATE product SET cost_price = ?, selling_price = ?, updated_at = ? WHERE id = ?;
+
+getAllActive:
+SELECT * FROM product WHERE is_active = 1 ORDER BY updated_at DESC;
+
+getById:
+SELECT * FROM product WHERE id = ?;
+
+getByCategory:
+SELECT * FROM product WHERE category = ? AND is_active = 1 ORDER BY name ASC;
+
+searchByName:
+SELECT * FROM product
+WHERE is_active = 1 AND (
+    name LIKE ('%' || ? || '%') OR
+    brand LIKE ('%' || ? || '%') OR
+    model LIKE ('%' || ? || '%') OR
+    imei LIKE ('%' || ? || '%')
+)
+ORDER BY name ASC;
+
+getLowStock:
+SELECT * FROM product WHERE stock <= low_stock_threshold AND is_active = 1;
+
+softDelete:
+UPDATE product SET is_active = 0, updated_at = ? WHERE id = ?;
+
+countActive:
+SELECT COUNT(*) FROM product WHERE is_active = 1;
+
+getTotalInventoryValue:
+SELECT COALESCE(SUM(cost_price * stock), 0.0) FROM product WHERE is_active = 1;
+
+getTotalInventorySellingValue:
+SELECT COALESCE(SUM(selling_price * stock), 0.0) FROM product WHERE is_active = 1;

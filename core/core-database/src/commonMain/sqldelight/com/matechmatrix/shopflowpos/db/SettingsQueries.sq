@@ -1,0 +1,29 @@
+CREATE TABLE IF NOT EXISTS settings (
+    key     TEXT NOT NULL PRIMARY KEY,
+    value   TEXT NOT NULL
+);
+
+-- Keys used by the app:
+-- 'activation_token'   → license activation token
+-- 'shop_name'          → shop display name
+-- 'shop_address'       → shop address
+-- 'shop_phone'         → shop phone
+-- 'currency_symbol'    → "Rs." by default
+-- 'theme'              → "light" or "dark"
+-- 'analytics_visible'  → "true" or "false" (dashboard toggle)
+-- 'show_cost_price'    → "true" or "false" (inventory)
+-- 'default_deduction_percent' → e.g. "10.0"
+-- 'low_stock_alert'    → "3" (threshold)
+-- 'initial_cash'       → set on first run
+
+upsertSetting:
+INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?);
+
+getSetting:
+SELECT value FROM settings WHERE key = ?;
+
+getAllSettings:
+SELECT * FROM settings;
+
+deleteSetting:
+DELETE FROM settings WHERE key = ?;

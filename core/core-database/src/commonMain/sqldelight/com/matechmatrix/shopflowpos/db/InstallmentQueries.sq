@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS installment (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    customer_id     TEXT    NOT NULL,
+    customer_name   TEXT    NOT NULL,
+    product_id      TEXT    NOT NULL,
+    product_name    TEXT    NOT NULL,
+    total_amount    REAL    NOT NULL,
+    down_payment    REAL    NOT NULL DEFAULT 0.0,
+    remaining_amount REAL   NOT NULL,
+    monthly_amount  REAL    NOT NULL,
+    total_months    INTEGER NOT NULL,
+    paid_months     INTEGER NOT NULL DEFAULT 0,
+    start_date      INTEGER NOT NULL,
+    next_due_date   INTEGER NOT NULL,
+    is_completed    INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL
+);
+
+insertInstallment:
+INSERT INTO installment VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateInstallmentPayment:
+UPDATE installment SET
+    remaining_amount = remaining_amount - ?,
+    paid_months = paid_months + 1,
+    next_due_date = ?,
+    is_completed = (CASE WHEN paid_months + 1 >= total_months THEN 1 ELSE 0 END)
+WHERE id = ?;
+
+getAllInstallments:
+SELECT * FROM installment ORDER BY next_due_date ASC;
+
+getActiveInstallments:
+SELECT * FROM installment WHERE is_completed = 0 ORDER BY next_due_date ASC;
+
+getInstallmentById:
+SELECT * FROM installment WHERE id = ?;
+
+getOverdueInstallments:
+SELECT * FROM installment
+WHERE is_completed = 0 AND next_due_date < ?
+ORDER BY next_due_date ASC;

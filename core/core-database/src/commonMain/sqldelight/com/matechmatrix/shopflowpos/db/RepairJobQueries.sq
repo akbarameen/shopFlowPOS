@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS repair_job (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    customer_name   TEXT    NOT NULL,
+    customer_phone  TEXT    NOT NULL,
+    device_model    TEXT    NOT NULL,
+    problem         TEXT    NOT NULL,
+    estimated_cost  REAL    NOT NULL DEFAULT 0.0,
+    final_cost      REAL,
+    status          TEXT    NOT NULL DEFAULT 'PENDING',
+    notes           TEXT,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
+);
+
+insertRepairJob:
+INSERT INTO repair_job VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRepairStatus:
+UPDATE repair_job SET status = ?, final_cost = ?, notes = ?, updated_at = ? WHERE id = ?;
+
+getAllRepairJobs:
+SELECT * FROM repair_job ORDER BY created_at DESC;
+
+getActiveRepairJobs:
+SELECT * FROM repair_job
+WHERE status NOT IN ('DELIVERED', 'CANCELLED')
+ORDER BY created_at DESC;
+
+getRepairJobById:
+SELECT * FROM repair_job WHERE id = ?;

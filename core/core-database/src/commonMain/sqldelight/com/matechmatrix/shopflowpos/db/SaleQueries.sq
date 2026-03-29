@@ -1,0 +1,116 @@
+CREATE TABLE IF NOT EXISTS sale (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    invoice_number  TEXT    NOT NULL,
+    customer_id     TEXT,
+    customer_name   TEXT,
+    subtotal        REAL    NOT NULL DEFAULT 0.0,
+    discount        REAL    NOT NULL DEFAULT 0.0,
+    total_amount    REAL    NOT NULL DEFAULT 0.0,
+    cost_total      REAL    NOT NULL DEFAULT 0.0,
+    gross_profit    REAL    NOT NULL DEFAULT 0.0,
+    payment_method  TEXT    NOT NULL,
+    cash_amount     REAL    NOT NULL DEFAULT 0.0,
+    bank_amount     REAL    NOT NULL DEFAULT 0.0,
+    bank_account_id TEXT,
+    due_amount      REAL    NOT NULL DEFAULT 0.0,
+    due_date        INTEGER,
+    status          TEXT    NOT NULL DEFAULT 'COMPLETED',
+    notes           TEXT,
+    sold_at         INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sale_item (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    sale_id         TEXT    NOT NULL,
+    product_id      TEXT    NOT NULL,
+    product_name    TEXT    NOT NULL,
+    quantity        INTEGER NOT NULL,
+    cost_price      REAL    NOT NULL,
+    selling_price   REAL    NOT NULL,
+    discount        REAL    NOT NULL DEFAULT 0.0,
+    line_total      REAL    NOT NULL,
+    FOREIGN KEY (sale_id) REFERENCES sale(id) ON DELETE CASCADE
+);
+
+insertSale:
+INSERT INTO sale VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertSaleItem:
+INSERT INTO sale_item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+getSaleById:
+SELECT * FROM sale WHERE id = ?;
+
+getSaleItemsBySaleId:
+SELECT * FROM sale_item WHERE sale_id = ?;
+
+getSalesByDateRange:
+SELECT * FROM sale WHERE sold_at BETWEEN ? AND ? ORDER BY sold_at DESC;
+
+getDailyRevenue:
+SELECT COALESCE(SUM(total_amount), 0.0) FROM sale
+WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
+
+getDailyGrossProfit:
+SELECT COALESCE(SUM(gross_profit), 0.0) FROM sale
+WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
+
+getDailySalesCount:
+SELECT COUNT(*) FROM sale
+WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
+
+getDailyCashRevenue:
+SELECT COALESCE(SUM(cash_amount), 0.0) FROM sale
+WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
+
+getDailyBankRevenue:
+SELECT COALESCE(SUM(bank_amount), 0.0) FROM sale
+WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
+
+updateSaleStatus:
+UPDATE sale SET status = ? WHERE id = ?;
+
+countTodaySales:
+SELECT COUNT(*) FROM sale WHERE sold_at BETWEEN ? AND ?;
+
+getTopProductsByDateRange:
+SELECT product_id, product_name,
+       SUM(quantity) AS total_qty,
+       SUM(line_total) AS total_revenue
+FROM sale_item si
+JOIN sale s ON si.sale_id = s.id
+WHERE s.sold_at BETWEEN ? AND ? AND s.status != 'RETURNED'
+GROUP BY product_id, product_name
+ORDER BY total_revenue DESC
+LIMIT 10;
+
+getDues:
+SELECT * FROM sale WHERE due_amount > 0 AND status != 'RETURNED' ORDER BY due_date ASC;
+
+-- New queries for dynamic graphs
+getWeeklyRevenue:
+SELECT 
+    strftime('%Y-%W', sold_at / 1000, 'unixepoch') AS week,
+    SUM(total_amount) AS revenue
+FROM sale
+WHERE sold_at >= ? AND status != 'RETURNED'
+GROUP BY week
+ORDER BY week ASC;
+
+getMonthlyRevenue:
+SELECT 
+    strftime('%Y-%m', sold_at / 1000, 'unixepoch') AS month,
+    SUM(total_amount) AS revenue
+FROM sale
+WHERE sold_at >= ? AND status != 'RETURNED'
+GROUP BY month
+ORDER BY month ASC;
+
+getYearlyRevenue:
+SELECT 
+    strftime('%Y', sold_at / 1000, 'unixepoch') AS year,
+    SUM(total_amount) AS revenue
+FROM sale
+WHERE sold_at >= ? AND status != 'RETURNED'
+GROUP BY year
+ORDER BY year ASC;

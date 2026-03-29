@@ -1,0 +1,36 @@
+CREATE TABLE IF NOT EXISTS sale_return (
+    id                      TEXT    NOT NULL PRIMARY KEY,
+    original_sale_id        TEXT    NOT NULL,
+    product_id              TEXT    NOT NULL,
+    product_name            TEXT    NOT NULL,
+    returned_quantity       INTEGER NOT NULL,
+    original_selling_price  REAL    NOT NULL,
+    deduction_amount        REAL    NOT NULL DEFAULT 0.0,
+    refund_amount           REAL    NOT NULL,
+    return_reason           TEXT    NOT NULL,
+    returned_at             INTEGER NOT NULL,
+    FOREIGN KEY (original_sale_id) REFERENCES sale(id)
+);
+
+insertReturn:
+INSERT INTO sale_return VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+getReturnsByDateRange:
+SELECT * FROM sale_return
+WHERE returned_at BETWEEN ? AND ?
+ORDER BY returned_at DESC;
+
+getReturnsBySaleId:
+SELECT * FROM sale_return WHERE original_sale_id = ?;
+
+getTotalDeductionsByDateRange:
+SELECT COALESCE(SUM(deduction_amount), 0.0) FROM sale_return
+WHERE returned_at BETWEEN ? AND ?;
+
+getTotalRefundsByDateRange:
+SELECT COALESCE(SUM(refund_amount), 0.0) FROM sale_return
+WHERE returned_at BETWEEN ? AND ?;
+
+countReturnsByDateRange:
+SELECT COUNT(*) FROM sale_return
+WHERE returned_at BETWEEN ? AND ?;
