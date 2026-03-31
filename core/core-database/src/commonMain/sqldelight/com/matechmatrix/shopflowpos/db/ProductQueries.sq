@@ -1,3 +1,12 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: product.sq
+-- NOTE: Largely the same as v1 — key improvements:
+--   • supplier_id removed (a product can be sourced from many suppliers; use
+--     purchase_order_item to track per-purchase sourcing instead).
+--   • getPosProducts query added for the POS checkout screen.
+--   • getAllActive filter made symmetric for PHONE/TABLET (stock > 0).
+-- ════════════════════════════════════════════════════════════════════════════
+ 
 CREATE TABLE IF NOT EXISTS product (
     id                  TEXT    NOT NULL PRIMARY KEY,
     name                TEXT    NOT NULL,
@@ -17,7 +26,7 @@ CREATE TABLE IF NOT EXISTS product (
     is_active           INTEGER NOT NULL DEFAULT 1,
     created_at          INTEGER NOT NULL,
     updated_at          INTEGER NOT NULL,
-    -- Spec columns (nullable — only populated for relevant categories)
+    -- Spec columns (nullable — only for relevant categories)
     color               TEXT,
     storage_gb          INTEGER,
     ram_gb              INTEGER,
@@ -26,59 +35,60 @@ CREATE TABLE IF NOT EXISTS product (
     screen_size_inch    REAL,
     processor           TEXT
 );
-
--- ─── Indexes ────────────────────────────────────────────────────────────────
+ 
 CREATE INDEX IF NOT EXISTS idx_product_category   ON product(category, is_active);
 CREATE INDEX IF NOT EXISTS idx_product_stock      ON product(stock, is_active);
 CREATE INDEX IF NOT EXISTS idx_product_updated_at ON product(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_product_imei       ON product(imei) WHERE imei IS NOT NULL;
-
--- ─── Queries ────────────────────────────────────────────────────────────────
-
+CREATE INDEX IF NOT EXISTS idx_product_barcode    ON product(barcode) WHERE barcode IS NOT NULL;
+ 
 insertProduct:
 INSERT OR REPLACE INTO product (
     id, name, brand, model, imei, cost_price, selling_price, stock,
     low_stock_threshold, condition_type, category, pta_status, image_uri,
-    barcode, notes, is_active, created_at, updated_at, color, storage_gb,
-    ram_gb, rom_gb, battery_mah, screen_size_inch, processor
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+    barcode, notes, is_active, created_at, updated_at,
+    color, storage_gb, ram_gb, rom_gb, battery_mah, screen_size_inch, processor
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
 updateProduct:
 UPDATE product SET
-    name             = ?,
-    brand            = ?,
-    model            = ?,
-    cost_price       = ?,
-    selling_price    = ?,
-    stock            = ?,
-    low_stock_threshold = ?,
-    condition_type   = ?,
-    category         = ?,
-    pta_status       = ?,
-    notes            = ?,
-    color            = ?,
-    storage_gb       = ?,
-    ram_gb           = ?,
-    rom_gb           = ?,
-    battery_mah      = ?,
-    screen_size_inch = ?,
-    processor        = ?,
+    name             = ?, brand            = ?, model            = ?,
+    cost_price       = ?, selling_price    = ?, stock            = ?,
+    low_stock_threshold = ?, condition_type   = ?, category         = ?,
+    pta_status       = ?, notes            = ?, color            = ?,
+    storage_gb       = ?, ram_gb           = ?, rom_gb           = ?,
+    battery_mah      = ?, screen_size_inch = ?, processor        = ?,
     updated_at       = ?
 WHERE id = ?;
-
+ 
 updateStock:
 UPDATE product SET stock = ?, updated_at = ? WHERE id = ?;
-
+ 
 decrementStock:
 UPDATE product SET stock = MAX(0, stock - ?), updated_at = ? WHERE id = ?;
-
+ 
 incrementStock:
 UPDATE product SET stock = stock + ?, updated_at = ? WHERE id = ?;
-
+ 
 updatePrices:
 UPDATE product SET cost_price = ?, selling_price = ?, updated_at = ? WHERE id = ?;
-
+ 
+-- Mark an IMEI item as sold (stock → 0, kept active for history)
+markAsSold:
+UPDATE product SET stock = 0, updated_at = ? WHERE id = ?;
+ 
+softDeleteProduct:
+UPDATE product SET is_active = 0, updated_at = ? WHERE id = ?;
+ 
+getById:
+SELECT * FROM product WHERE id = ?;
+ 
+getByImei:
+SELECT * FROM product WHERE imei = ? AND is_active = 1 LIMIT 1;
+ 
+getByBarcode:
+SELECT * FROM product WHERE barcode = ? AND is_active = 1 LIMIT 1;
+ 
 getAllActive:
 SELECT * FROM product
 WHERE is_active = 1
@@ -88,7 +98,7 @@ WHERE is_active = 1
   )
 ORDER BY updated_at DESC
 LIMIT :limit OFFSET :offset;
-
+ 
 countAllActive:
 SELECT COUNT(*) FROM product
 WHERE is_active = 1
@@ -96,20 +106,17 @@ WHERE is_active = 1
     (category IN ('PHONE','TABLET') AND stock > 0)
     OR category NOT IN ('PHONE','TABLET')
   );
-
-getById:
-SELECT * FROM product WHERE id = ?;
-
+ 
 getByCategory:
 SELECT * FROM product
-WHERE category = ? AND is_active = 1
+WHERE category = :category AND is_active = 1
   AND (
     (category IN ('PHONE','TABLET') AND stock > 0)
     OR category NOT IN ('PHONE','TABLET')
   )
 ORDER BY name ASC
 LIMIT :limit OFFSET :offset;
-
+ 
 searchProducts:
 SELECT * FROM product
 WHERE is_active = 1
@@ -127,26 +134,27 @@ WHERE is_active = 1
   )
 ORDER BY name ASC
 LIMIT :limit OFFSET :offset;
-
+ 
+-- POS screen: all sellable products (stock > 0 for everything in POS)
+getPosProducts:
+SELECT *
+FROM product
+WHERE is_active = 1 AND stock > 0
+ORDER BY name ASC
+LIMIT :limit OFFSET :offset;
+ 
 getLowStock:
 SELECT * FROM product
-WHERE stock <= low_stock_threshold
-  AND stock > 0
+WHERE stock <= low_stock_threshold AND stock > 0
   AND is_active = 1
-  AND category NOT IN ('PHONE','TABLET');
-
-softDelete:
-UPDATE product SET is_active = 0, updated_at = ? WHERE id = ?;
-
--- Mark IMEI item as sold (stock = 0, is_active stays 1 for history)
-markAsSold:
-UPDATE product SET stock = 0, updated_at = ? WHERE id = ?;
-
+  AND category NOT IN ('PHONE','TABLET')
+ORDER BY stock ASC;
+ 
 countActive:
 SELECT COUNT(*) FROM product WHERE is_active = 1;
-
-getTotalInventoryValue:
+ 
+getTotalInventoryCostValue:
 SELECT COALESCE(SUM(cost_price * stock), 0.0) FROM product WHERE is_active = 1;
-
+ 
 getTotalInventorySellingValue:
 SELECT COALESCE(SUM(selling_price * stock), 0.0) FROM product WHERE is_active = 1;

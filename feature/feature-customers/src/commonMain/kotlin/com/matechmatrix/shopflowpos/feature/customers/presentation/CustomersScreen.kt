@@ -1,10 +1,14 @@
+// ════════════════════════════════════════════════════════════════════════════
+// feature/customers/presentation/CustomersScreen.kt
+// ════════════════════════════════════════════════════════════════════════════
 package com.matechmatrix.shopflowpos.feature.customers.presentation
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -21,352 +25,310 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.matechmatrix.shopflowpos.core.common.util.CurrencyFormatter
+import com.matechmatrix.shopflowpos.core.model.BankAccount
+import com.matechmatrix.shopflowpos.core.model.CashAccount
 import com.matechmatrix.shopflowpos.core.model.Customer
+import com.matechmatrix.shopflowpos.core.model.enums.AccountType
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
+import com.matechmatrix.shopflowpos.core.ui.components.EmptyStateView
+import com.matechmatrix.shopflowpos.core.ui.components.LoadingView
 import com.matechmatrix.shopflowpos.core.ui.theme.*
 import org.koin.compose.viewmodel.koinViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomersScreen(
-    windowSize: AppWindowSize,
-    navigateChild: (String) -> Unit = {},
-    viewModel: CustomersViewModel = koinViewModel()
+    windowSize    : AppWindowSize,
+    navigateChild : (String) -> Unit = {},
+    viewModel     : CustomersViewModel = koinViewModel()
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val state          by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarState  = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { e ->
-            if (e is CustomersEffect.Toast) snackbarHostState.showSnackbar(
-                e.msg
-            )
+            if (e is CustomersEffect.ShowToast) snackbarState.showSnackbar(e.message)
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackbarState) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.onIntent(CustomersIntent.ShowAddDialog) },
+                onClick        = { viewModel.onIntent(CustomersIntent.ShowAddDialog) },
                 containerColor = Primary,
-                contentColor = Color.White,
-                shape = androidx.compose.foundation.shape.CircleShape
+                contentColor   = Color.White,
+                shape          = CircleShape
             ) { Icon(Icons.Rounded.PersonAdd, "Add Customer") }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) {
         Column(
-            Modifier.fillMaxSize().padding(16.dp),
+            modifier            = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── Header ──
-//            Text(
-//                "Customers",
-//                fontSize = 20.sp, fontWeight = FontWeight.ExtraBold,
-//                letterSpacing = (-0.4).sp, color = MaterialTheme.colorScheme.onBackground
-//            )
-
-            // ── HTML-style search ──
-            TextField(
-                value = state.searchQuery,
-                onValueChange = { viewModel.onIntent(CustomersIntent.Search(it)) },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search customers...", color = TextMuted) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Rounded.Search,
-                        null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = InputBgLight,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                )
-            )
-
-            // ── Total due banner ──
-            if (!state.isLoading && state.totalDue > 0) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(DangerContainer)
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Warning,
-                            null,
-                            tint = Danger,
-                            modifier = Modifier.size(16.dp)
-                        )
+            // ── Header ───────────────────────────────────────────────────────
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column {
+//                    Text(
+//                        "Customers",
+//                        style      = MaterialTheme.typography.headlineSmall,
+//                        fontWeight = FontWeight.Bold,
+//                        color      = TextPrimary
+//                    )
+                    if (state.customers.isNotEmpty()) {
                         Text(
-                            "Total Outstanding Due",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Danger
-                        )
-                    }
-                    Text(
-                        CurrencyFormatter.formatRs(state.totalDue),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Danger
-                    )
-                }
-            }
-
-            when {
-                state.isLoading -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Primary)
-                }
-
-                state.filtered.isEmpty() -> Box(
-                    Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            Modifier.size(72.dp).clip(RoundedCornerShape(20.dp))
-                                .background(PrimaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.Group,
-                                null,
-                                tint = Primary,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                        Text(
-                            "No customers found",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            "Tap + to add your first customer",
+                            "${state.customers.size} customers",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted
                         )
                     }
                 }
-
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(state.filtered, key = { it.id }) { c ->
-                        CustomerCard(c, state.currencySymbol, viewModel)
+                // Total outstanding badge
+                AnimatedVisibility(state.totalOutstanding > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DangerContainer
+                    ) {
+                        Column(
+                            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            Text(
+                                "Total Due",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Danger
+                            )
+                            Text(
+                                CurrencyFormatter.formatRs(state.totalOutstanding),
+                                style      = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color      = Danger
+                            )
+                        }
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
+                }
+            }
+
+            // ── Search ───────────────────────────────────────────────────────
+            TextField(
+                value         = state.searchQuery,
+                onValueChange = { viewModel.onIntent(CustomersIntent.Search(it)) },
+                modifier      = Modifier.fillMaxWidth(),
+                placeholder   = { Text("Search by name, phone, CNIC…", color = TextMuted) },
+                leadingIcon   = {
+                    Icon(Icons.Rounded.Search, null, tint = TextMuted, modifier = Modifier.size(20.dp))
+                },
+                trailingIcon  = if (state.searchQuery.isNotBlank()) ({
+                    IconButton(onClick = { viewModel.onIntent(CustomersIntent.Search("")) }) {
+                        Icon(Icons.Rounded.Close, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                    }
+                }) else null,
+                singleLine    = true,
+                shape         = RoundedCornerShape(12.dp),
+                colors        = TextFieldDefaults.colors(
+                    focusedContainerColor   = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedIndicatorColor   = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                )
+            )
+
+            // ── Content ───────────────────────────────────────────────────────
+            when {
+                state.isLoading -> LoadingView()
+
+                state.filtered.isEmpty() -> EmptyStateView(
+                    icon     = Icons.Rounded.Group,
+                    title    = "No customers found",
+                    subtitle = if (state.searchQuery.isBlank()) "Tap + to add your first customer"
+                    else "No results for \"${state.searchQuery}\""
+                )
+
+                else -> LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding      = PaddingValues(bottom = 88.dp)
+                ) {
+                    items(state.filtered, key = { it.id }) { customer ->
+                        CustomerCard(
+                            customer       = customer,
+                            currencySymbol = state.currencySymbol,
+                            onEdit         = { viewModel.onIntent(CustomersIntent.ShowEditDialog(customer)) },
+                            onDelete       = { viewModel.onIntent(CustomersIntent.ConfirmDelete(customer.id)) },
+                            onCollectDue   = { viewModel.onIntent(CustomersIntent.ShowDueDialog(customer)) }
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (state.showFormDialog) CustomerFormDialog(state, viewModel)
+    // ── Dialogs ───────────────────────────────────────────────────────────────
 
-    state.showDueDialog?.let { c ->
-        AlertDialog(
-            onDismissRequest = { viewModel.onIntent(CustomersIntent.DismissDueDialog) },
-            title = { Text("Collect Due", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                            .background(DangerContainer).padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            c.name,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Danger
-                        )
-                        Text(
-                            "Due: ${CurrencyFormatter.formatRs(c.dueBalance)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Danger
-                        )
-                    }
-                    OutlinedTextField(
-                        value = state.dueCollectAmount,
-                        onValueChange = { viewModel.onIntent(CustomersIntent.SetDueAmount(it)) },
-                        label = { Text("Amount Collected") }, prefix = { Text("Rs. ") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Primary,
-                            unfocusedBorderColor = BorderColor
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.onIntent(CustomersIntent.CollectDue) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Success),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Collect Payment") }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.onIntent(CustomersIntent.DismissDueDialog) }) {
-                    Text(
-                        "Cancel"
-                    )
-                }
-            }
+    if (state.showFormDialog) {
+        CustomerFormDialog(state = state, viewModel = viewModel)
+    }
+
+    state.showDueDialog?.let { customer ->
+        DueCollectionDialog(
+            customer       = customer,
+            state          = state,
+            currencySymbol = state.currencySymbol,
+            viewModel      = viewModel
         )
     }
 
     state.showDeleteId?.let {
         AlertDialog(
             onDismissRequest = { viewModel.onIntent(CustomersIntent.ConfirmDelete("")) },
-            title = { Text("Delete Customer?", fontWeight = FontWeight.Bold) },
-            text = { Text("Their transaction history will be preserved.") },
+            icon     = { Icon(Icons.Rounded.PersonRemove, null, tint = Danger) },
+            title    = { Text("Remove Customer?", fontWeight = FontWeight.Bold) },
+            text     = { Text("The customer will be deactivated. Their sale history is preserved.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.onIntent(CustomersIntent.DeleteCustomer) }) {
-                    Text(
-                        "Delete",
-                        color = Danger
-                    )
-                }
+                Button(
+                    onClick = { viewModel.onIntent(CustomersIntent.DeleteCustomer) },
+                    colors  = ButtonDefaults.buttonColors(containerColor = Danger)
+                ) { Text("Remove") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    viewModel.onIntent(
-                        CustomersIntent.ConfirmDelete(
-                            ""
-                        )
-                    )
-                }) { Text("Cancel") }
+                TextButton(onClick = { viewModel.onIntent(CustomersIntent.ConfirmDelete("")) }) {
+                    Text("Cancel")
+                }
             }
         )
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer Card
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun CustomerCard(c: Customer, currencySymbol: String, viewModel: CustomersViewModel) {
+private fun CustomerCard(
+    customer       : Customer,
+    currencySymbol : String,
+    onEdit         : () -> Unit,
+    onDelete       : () -> Unit,
+    onCollectDue   : () -> Unit,
+) {
     Card(
-        Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier  = Modifier.fillMaxWidth(),
+        shape     = RoundedCornerShape(14.dp),
+        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(14.dp),
+            modifier            = Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Top row: avatar + name/phone + actions
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment     = Alignment.CenterVertically
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment     = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Avatar circle with initial
+                    // Avatar
                     Box(
-                        Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
+                        modifier         = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(13.dp))
                             .background(PrimaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            c.name.first().uppercase(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Primary, fontWeight = FontWeight.Bold
+                            customer.name.first().uppercase(),
+                            style      = MaterialTheme.typography.titleMedium,
+                            color      = Primary,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-                    Column {
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            c.name,
-                            style = MaterialTheme.typography.bodyMedium,
+                            customer.name,
+                            style      = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
+                            color      = TextPrimary
                         )
-                        if (!c.phone.isNullOrBlank()) {
+                        if (customer.phone.isNotBlank()) {
                             Text(
-                                c.phone,
+                                customer.phone,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                        }
+                        if (!customer.city.isNullOrBlank()) {
+                            Text(
+                                customer.city,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted
                             )
                         }
                     }
                 }
+
                 Row {
-                    IconButton(
-                        onClick = { viewModel.onIntent(CustomersIntent.ShowEditDialog(c)) },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Edit,
-                            null,
-                            tint = Primary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    IconButton(onClick = onEdit, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Rounded.Edit, null, tint = Primary, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(
-                        onClick = { viewModel.onIntent(CustomersIntent.ConfirmDelete(c.id)) },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            null,
-                            tint = Danger,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Rounded.PersonRemove, null, tint = Danger, modifier = Modifier.size(16.dp))
                     }
                 }
             }
-            if (c.dueBalance > 0) {
-                HorizontalDivider(color = BorderFaint, thickness = 1.dp)
+
+            // Stats row
+            if (customer.totalTransactions > 0) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    LabelValue("Purchases", customer.totalTransactions.toString())
+                    LabelValue("Total Spent", "$currencySymbol ${CurrencyFormatter.formatCompact(customer.totalPurchases)}")
+                    if (customer.creditLimit > 0) {
+                        LabelValue("Credit Limit", "$currencySymbol ${CurrencyFormatter.formatCompact(customer.creditLimit)}")
+                    }
+                }
+            }
+
+            // Due row
+            if (customer.outstandingBalance > 0) {
+                HorizontalDivider(color = BorderFaint, thickness = 0.5.dp)
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment     = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            Icons.Rounded.Warning,
-                            null,
-                            tint = Danger,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(Icons.Rounded.Warning, null, tint = Danger, modifier = Modifier.size(14.dp))
                         Text(
-                            "Due: ${CurrencyFormatter.formatRs(c.dueBalance)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Danger,
+                            "Due: $currencySymbol ${CurrencyFormatter.formatRs(customer.outstandingBalance)}",
+                            style      = MaterialTheme.typography.labelSmall,
+                            color      = Danger,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Surface(
-                        onClick = { viewModel.onIntent(CustomersIntent.ShowDueDialog(c)) },
-                        shape = RoundedCornerShape(100.dp), color = SuccessContainer
+                        onClick = onCollectDue,
+                        shape   = RoundedCornerShape(100.dp),
+                        color   = SuccessContainer
                     ) {
                         Text(
                             "Collect",
-                            Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
+                            modifier   = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style      = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = Success
+                            color      = Success
                         )
                     }
                 }
@@ -376,79 +338,283 @@ private fun CustomerCard(c: Customer, currencySymbol: String, viewModel: Custome
 }
 
 @Composable
-private fun CustomerFormDialog(state: CustomersState, viewModel: CustomersViewModel) {
+private fun LabelValue(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+        Text(value, style = MaterialTheme.typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Due Collection Dialog (with account selector)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DueCollectionDialog(
+    customer       : Customer,
+    state          : CustomersState,
+    currencySymbol : String,
+    viewModel      : CustomersViewModel
+) {
+    var showAccountDropdown by remember { mutableStateOf(false) }
+
     AlertDialog(
-        onDismissRequest = { viewModel.onIntent(CustomersIntent.DismissDialog) },
-        title = {
-            Text(
-                if (state.editingCustomer != null) "Edit Customer" else "Add Customer",
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf(
-                    Triple("Full Name *", state.formName) { v: String ->
-                        viewModel.onIntent(
-                            CustomersIntent.FormName(v)
-                        )
-                    },
-                    Triple("Phone", state.formPhone) { v: String ->
-                        viewModel.onIntent(
-                            CustomersIntent.FormPhone(v)
-                        )
-                    },
-                    Triple("Email", state.formEmail) { v: String ->
-                        viewModel.onIntent(
-                            CustomersIntent.FormEmail(v)
-                        )
-                    },
-                    Triple("Address", state.formAddress) { v: String ->
-                        viewModel.onIntent(
-                            CustomersIntent.FormAddress(v)
-                        )
-                    },
-                    Triple("Notes", state.formNotes) { v: String ->
-                        viewModel.onIntent(
-                            CustomersIntent.FormNotes(v)
-                        )
-                    }
-                ).forEach { (label, value, onChange) ->
-                    OutlinedTextField(
-                        value = value,
-                        onValueChange = onChange,
-                        label = { Text(label) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Primary,
-                            unfocusedBorderColor = BorderColor
-                        )
+        onDismissRequest = { viewModel.onIntent(CustomersIntent.DismissDueDialog) },
+        title            = { Text("Collect Payment", fontWeight = FontWeight.Bold) },
+        text             = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Customer + due info
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(DangerContainer)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        customer.name,
+                        style      = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = Danger
+                    )
+                    Text(
+                        "Due: $currencySymbol ${CurrencyFormatter.formatRs(customer.outstandingBalance)}",
+                        style      = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color      = Danger
                     )
                 }
-                state.formError?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Danger
+
+                // Amount
+                OutlinedTextField(
+                    value         = state.dueCollectAmount,
+                    onValueChange = { viewModel.onIntent(CustomersIntent.SetDueAmount(it)) },
+                    label         = { Text("Amount") },
+                    prefix        = { Text("$currencySymbol ") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth(),
+                    shape         = RoundedCornerShape(10.dp),
+                    colors        = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = Primary,
+                        unfocusedBorderColor = BorderColor
                     )
+                )
+
+                // Account type selector
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier              = Modifier.fillMaxWidth()
+                ) {
+                    listOf(AccountType.CASH to "Cash", AccountType.BANK to "Bank").forEach { (type, label) ->
+                        val selected = state.dueAccountType == type
+                        FilterChip(
+                            selected  = selected,
+                            onClick   = { viewModel.onIntent(CustomersIntent.SetDueAccountType(type)) },
+                            label     = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                            modifier  = Modifier.weight(1f),
+                            colors    = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Primary,
+                                selectedLabelColor     = Color.White
+                            )
+                        )
+                    }
+                }
+
+                // Account dropdown (show only when BANK selected and bank accounts exist)
+                if (state.dueAccountType == AccountType.BANK && state.bankAccounts.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded        = showAccountDropdown,
+                        onExpandedChange = { showAccountDropdown = it }
+                    ) {
+                        OutlinedTextField(
+                            value         = state.bankAccounts.find { it.id == state.dueAccountId }?.bankName ?: "Select Bank",
+                            onValueChange = {},
+                            readOnly      = true,
+                            label         = { Text("Bank Account") },
+                            trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(showAccountDropdown) },
+                            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+                            shape         = RoundedCornerShape(10.dp),
+                            colors        = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor   = Primary,
+                                unfocusedBorderColor = BorderColor
+                            )
+                        )
+                        ExposedDropdownMenu(
+                            expanded        = showAccountDropdown,
+                            onDismissRequest = { showAccountDropdown = false }
+                        ) {
+                            state.bankAccounts.forEach { bank ->
+                                DropdownMenuItem(
+                                    text    = {
+                                        Column {
+                                            Text(bank.bankName, fontWeight = FontWeight.SemiBold)
+                                            Text(bank.accountTitle, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.onIntent(CustomersIntent.SetDueAccountId(bank.id))
+                                        showAccountDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else if (state.dueAccountType == AccountType.CASH && state.cashAccounts.size > 1) {
+                    // Multiple cash accounts — show selector
+                    ExposedDropdownMenuBox(
+                        expanded         = showAccountDropdown,
+                        onExpandedChange = { showAccountDropdown = it }
+                    ) {
+                        OutlinedTextField(
+                            value         = state.cashAccounts.find { it.id == state.dueAccountId }?.name ?: "Cash",
+                            onValueChange = {},
+                            readOnly      = true,
+                            label         = { Text("Cash Account") },
+                            trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(showAccountDropdown) },
+                            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+                            shape         = RoundedCornerShape(10.dp),
+                            colors        = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor   = Primary,
+                                unfocusedBorderColor = BorderColor
+                            )
+                        )
+                        ExposedDropdownMenu(
+                            expanded         = showAccountDropdown,
+                            onDismissRequest = { showAccountDropdown = false }
+                        ) {
+                            state.cashAccounts.forEach { cash ->
+                                DropdownMenuItem(
+                                    text    = { Text(cash.name) },
+                                    onClick = {
+                                        viewModel.onIntent(CustomersIntent.SetDueAccountId(cash.id))
+                                        showAccountDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { viewModel.onIntent(CustomersIntent.SaveCustomer) },
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape = RoundedCornerShape(10.dp)
-            ) { Text(if (state.editingCustomer != null) "Update" else "Add Customer") }
+                onClick  = { viewModel.onIntent(CustomersIntent.CollectDue) },
+                enabled  = !state.isSaving && state.dueCollectAmount.isNotBlank(),
+                colors   = ButtonDefaults.buttonColors(containerColor = Success),
+                shape    = RoundedCornerShape(10.dp)
+            ) {
+                if (state.isSaving) CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                else Text("Collect Payment", fontWeight = FontWeight.Bold)
+            }
         },
         dismissButton = {
-            TextButton(onClick = { viewModel.onIntent(CustomersIntent.DismissDialog) }) {
-                Text(
-                    "Cancel"
-                )
+            TextButton(onClick = { viewModel.onIntent(CustomersIntent.DismissDueDialog) }) {
+                Text("Cancel")
             }
         }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer Form Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CustomerFormDialog(state: CustomersState, viewModel: CustomersViewModel) {
+    val isEditing = state.editingCustomer != null
+
+    AlertDialog(
+        onDismissRequest = { viewModel.onIntent(CustomersIntent.DismissDialog) },
+        title            = {
+            Text(
+                if (isEditing) "Edit Customer" else "Add Customer",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Required
+                CustomerTextField("Full Name *", state.formName) {
+                    viewModel.onIntent(CustomersIntent.FormName(it))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CustomerTextField("Phone", state.formPhone, Modifier.weight(1f), keyboardType = KeyboardType.Phone) {
+                        viewModel.onIntent(CustomersIntent.FormPhone(it))
+                    }
+                    CustomerTextField("WhatsApp", state.formWhatsapp, Modifier.weight(1f), keyboardType = KeyboardType.Phone) {
+                        viewModel.onIntent(CustomersIntent.FormWhatsapp(it))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CustomerTextField("CNIC", state.formCnic, Modifier.weight(1f), keyboardType = KeyboardType.Number) {
+                        if (it.length <= 13) viewModel.onIntent(CustomersIntent.FormCnic(it))
+                    }
+                    CustomerTextField("Email", state.formEmail, Modifier.weight(1f), keyboardType = KeyboardType.Email) {
+                        viewModel.onIntent(CustomersIntent.FormEmail(it))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CustomerTextField("City", state.formCity, Modifier.weight(1f)) {
+                        viewModel.onIntent(CustomersIntent.FormCity(it))
+                    }
+                    CustomerTextField(
+                        "Credit Limit", state.formCreditLimit,
+                        Modifier.weight(1f),
+                        keyboardType = KeyboardType.Decimal
+                    ) { viewModel.onIntent(CustomersIntent.FormCreditLimit(it)) }
+                }
+                CustomerTextField("Address", state.formAddress) {
+                    viewModel.onIntent(CustomersIntent.FormAddress(it))
+                }
+                CustomerTextField("Notes", state.formNotes) {
+                    viewModel.onIntent(CustomersIntent.FormNotes(it))
+                }
+
+                state.formError?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = Danger)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick  = { viewModel.onIntent(CustomersIntent.SaveCustomer) },
+                enabled  = !state.isSaving,
+                colors   = ButtonDefaults.buttonColors(containerColor = Primary),
+                shape    = RoundedCornerShape(10.dp)
+            ) {
+                if (state.isSaving) CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                else Text(if (isEditing) "Update" else "Add Customer", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.onIntent(CustomersIntent.DismissDialog) }) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun CustomerTextField(
+    label        : String,
+    value        : String,
+    modifier     : Modifier = Modifier.fillMaxWidth(),
+    keyboardType : KeyboardType = KeyboardType.Text,
+    onValueChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value          = value,
+        onValueChange  = onValueChange,
+        label          = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        singleLine     = true,
+        modifier       = modifier,
+        shape          = RoundedCornerShape(10.dp),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        colors         = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor   = Primary,
+            unfocusedBorderColor = BorderColor,
+            focusedLabelColor    = Primary
+        )
     )
 }

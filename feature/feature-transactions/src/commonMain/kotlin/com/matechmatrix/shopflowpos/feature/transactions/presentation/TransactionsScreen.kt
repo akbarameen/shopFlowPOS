@@ -27,7 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.matechmatrix.shopflowpos.core.common.util.CurrencyFormatter
 import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
 import com.matechmatrix.shopflowpos.core.model.Sale
-import com.matechmatrix.shopflowpos.core.model.enums.PaymentMethod
+import com.matechmatrix.shopflowpos.core.model.enums.PaymentStatus
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
 import com.matechmatrix.shopflowpos.core.ui.theme.*
 import org.koin.compose.viewmodel.koinViewModel
@@ -91,7 +91,7 @@ fun TransactionsScreen(
                 ) {
                     TxSumItem("${state.totalCount}", "Sales", Primary)
                     VerticalDivider(Modifier.height(36.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    TxSumItem(CurrencyFormatter.formatCompact(state.totalRevenue), "Revenue", Success)
+                    TxSumItem(CurrencyFormatter.formatRs(state.totalRevenue), "Revenue", Success)
                 }
             }
         }
@@ -185,9 +185,9 @@ private fun TxDesktopTable(state: TransactionsState) {
             ) {
                 TxTableHeader("Invoice",  0.22f)
                 TxTableHeader("Date",     0.20f)
-                TxTableHeader("Method",   0.20f)
-                TxTableHeader("Amount",   0.20f, TextAlign.End)
                 TxTableHeader("Status",   0.18f, TextAlign.Center)
+                TxTableHeader("Amount",   0.20f, TextAlign.End)
+                TxTableHeader("Due",      0.20f, TextAlign.End)
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -223,8 +223,8 @@ private fun RowScope.TxTableHeader(
 
 @Composable
 private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
-    val (payColor, payBg) = txPayPair(sale.paymentMethod)
-    val (statusLabel, statusColor, statusBg) = txStatusTriple(sale.paymentMethod)
+    val statusColor = txStatusColor(sale.paymentStatus)
+    val statusBg = statusColor.copy(alpha = 0.12f)
 
     Row(
         Modifier
@@ -245,7 +245,7 @@ private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
             Box(
                 Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(PrimaryContainer),
                 contentAlignment = Alignment.Center
-            ) { Text(txEmoji(sale.paymentMethod), fontSize = 13.sp) }
+            ) { Icon(Icons.Rounded.Receipt, null, tint = Primary, modifier = Modifier.size(16.dp)) }
             Text(
                 sale.invoiceNumber,
                 style      = MaterialTheme.typography.bodySmall,
@@ -260,18 +260,15 @@ private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
             style     = MaterialTheme.typography.bodySmall,
             color     = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        // Method chip
-        Box(Modifier.weight(0.20f)) {
-            Surface(
-                shape = RoundedCornerShape(100.dp),
-                color = payBg
-            ) {
+        // Status
+        Box(Modifier.weight(0.18f), contentAlignment = Alignment.Center) {
+            Surface(shape = RoundedCornerShape(100.dp), color = statusBg) {
                 Text(
-                    sale.paymentMethod.name.lowercase().replaceFirstChar { it.uppercase() },
+                    sale.paymentStatus.display,
                     Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     style      = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color      = payColor
+                    color      = statusColor
                 )
             }
         }
@@ -284,26 +281,23 @@ private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
             color      = MaterialTheme.colorScheme.onSurface,
             textAlign  = TextAlign.End
         )
-        // Status
-        Box(Modifier.weight(0.18f), contentAlignment = Alignment.Center) {
-            Surface(shape = RoundedCornerShape(100.dp), color = statusBg) {
-                Text(
-                    statusLabel,
-                    Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    style      = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color      = statusColor
-                )
-            }
-        }
+        // Due
+        Text(
+            CurrencyFormatter.formatRs(sale.dueAmount),
+            modifier   = Modifier.weight(0.20f),
+            style      = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold,
+            color      = if (sale.dueAmount > 0) Danger else TextMuted,
+            textAlign  = TextAlign.End
+        )
     }
 }
 
 // ── Card (Compact & Medium) ───────────────────────────────────────────────────
 @Composable
 private fun TxCard(sale: Sale, currencySymbol: String) {
-    val (payColor, payBg)             = txPayPair(sale.paymentMethod)
-    val (statusLabel, statusColor, statusBg) = txStatusTriple(sale.paymentMethod)
+    val statusColor = txStatusColor(sale.paymentStatus)
+    val statusBg = statusColor.copy(alpha = 0.12f)
 
     Card(
         Modifier.fillMaxWidth(),
@@ -319,50 +313,45 @@ private fun TxCard(sale: Sale, currencySymbol: String) {
             Box(
                 Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(PrimaryContainer),
                 contentAlignment = Alignment.Center
-            ) { Text(txEmoji(sale.paymentMethod), fontSize = 18.sp) }
+            ) { Icon(Icons.Rounded.Receipt, null, tint = Primary, modifier = Modifier.size(20.dp)) }
 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     sale.invoiceNumber,
                     style      = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color      = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    sale.customerName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     DateTimeUtils.formatDate(sale.soldAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(2.dp))
-                Surface(shape = RoundedCornerShape(100.dp), color = payBg) {
-                    Text(
-                        sale.paymentMethod.name.lowercase().replaceFirstChar { it.uppercase() },
-                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style      = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color      = payColor
-                    )
-                }
             }
 
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     CurrencyFormatter.formatRs(sale.totalAmount),
                     style      = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color      = MaterialTheme.colorScheme.onSurface
                 )
-                if (sale.discount > 0) {
+                if (sale.dueAmount > 0) {
                     Text(
-                        "Disc: ${CurrencyFormatter.formatRs(sale.discount)}",
+                        "Due: ${CurrencyFormatter.formatRs(sale.dueAmount)}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Danger, fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(Modifier.height(2.dp))
                 Surface(shape = RoundedCornerShape(100.dp), color = statusBg) {
                     Text(
-                        statusLabel,
+                        sale.paymentStatus.display,
                         Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         style      = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
@@ -375,23 +364,10 @@ private fun TxCard(sale: Sale, currencySymbol: String) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-private fun txEmoji(m: PaymentMethod) = when (m) {
-    PaymentMethod.CASH          -> "💵"
-    PaymentMethod.BANK_TRANSFER -> "🏦"
-    PaymentMethod.CREDIT        -> "📋"
-    PaymentMethod.PARTIAL       -> "🔀"
-    else                        -> "💳"
-}
-
-private fun txPayPair(m: PaymentMethod): Pair<Color, Color> = when (m) {
-    PaymentMethod.CASH                               -> Success to SuccessContainer
-    PaymentMethod.BANK_TRANSFER, PaymentMethod.CARD  -> Info    to InfoContainer
-    PaymentMethod.PARTIAL, PaymentMethod.SPLIT       -> Warning to WarningContainer
-    PaymentMethod.CREDIT                             -> Danger  to DangerContainer
-}
-
-private fun txStatusTriple(m: PaymentMethod): Triple<String, Color, Color> = when (m) {
-    PaymentMethod.CREDIT  -> Triple("DUE",     Danger,  DangerContainer)
-    PaymentMethod.PARTIAL -> Triple("PARTIAL", Warning, WarningContainer)
-    else                  -> Triple("PAID",    Success, SuccessContainer)
+private fun txStatusColor(status: PaymentStatus): Color = when (status) {
+    PaymentStatus.PAID -> Success
+    PaymentStatus.PARTIAL -> Warning
+    PaymentStatus.UNPAID -> Danger
+    PaymentStatus.RETURNED -> Info
+    PaymentStatus.CANCELLED -> TextMuted
 }

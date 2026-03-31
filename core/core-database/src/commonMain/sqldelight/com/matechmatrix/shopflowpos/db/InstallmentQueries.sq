@@ -1,42 +1,112 @@
-CREATE TABLE IF NOT EXISTS installment (
-    id              TEXT    NOT NULL PRIMARY KEY,
-    customer_id     TEXT    NOT NULL,
-    customer_name   TEXT    NOT NULL,
-    product_id      TEXT    NOT NULL,
-    product_name    TEXT    NOT NULL,
-    total_amount    REAL    NOT NULL,
-    down_payment    REAL    NOT NULL DEFAULT 0.0,
-    remaining_amount REAL   NOT NULL,
-    monthly_amount  REAL    NOT NULL,
-    total_months    INTEGER NOT NULL,
-    paid_months     INTEGER NOT NULL DEFAULT 0,
-    start_date      INTEGER NOT NULL,
-    next_due_date   INTEGER NOT NULL,
-    is_completed    INTEGER NOT NULL DEFAULT 0,
-    created_at      INTEGER NOT NULL
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: installment.sq
+-- Covers: installment_plan · installment_payment
+--
+-- FLOW when recording a payment:
+--   1. insertInstallmentPayment
+--   2. updatePlanOnPayment (update paid_amount, remaining, due_date, status)
+--   3. Update account balance + insertLedgerEntry (CREDIT, reference_type = 'INSTALLMENT_PAYMENT')
+--   4. decrementCustomerOutstanding (if customer linked)
+-- ════════════════════════════════════════════════════════════════════════════
+ 
+CREATE TABLE IF NOT EXISTS installment_plan (
+    id                  TEXT    NOT NULL PRIMARY KEY,
+    plan_number         TEXT    NOT NULL UNIQUE,        -- EMI-00001
+    -- Optional link to the formal sale record
+    sale_id             TEXT    REFERENCES sale(id) ON DELETE SET NULL,
+    -- Customer snapshot + optional FK
+    customer_id         TEXT,
+    customer_name       TEXT    NOT NULL,
+    customer_phone      TEXT    NOT NULL DEFAULT '',
+    customer_cnic       TEXT,
+    customer_address    TEXT    NOT NULL DEFAULT '',
+    -- Product description (snapshot; the actual product may be IMEI-specific)
+    product_id          TEXT    NOT NULL,
+    product_name        TEXT    NOT NULL,
+    imei                TEXT,
+    -- Financials
+    total_amount        REAL    NOT NULL,
+    down_payment        REAL    NOT NULL DEFAULT 0.0,
+    financed_amount     REAL    NOT NULL,               -- total - down_payment
+    installment_amount  REAL    NOT NULL,               -- amount per period
+    total_installments  INTEGER NOT NULL,
+    paid_installments   INTEGER NOT NULL DEFAULT 0,
+    paid_amount         REAL    NOT NULL DEFAULT 0.0,   -- including down_payment
+    remaining_amount    REAL    NOT NULL,
+    -- Schedule
+    frequency           TEXT    NOT NULL DEFAULT 'MONTHLY',
+    -- 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY'
+    start_date          INTEGER NOT NULL,
+    next_due_date       INTEGER NOT NULL,
+    -- Status
+    is_completed        INTEGER NOT NULL DEFAULT 0,
+    is_defaulted        INTEGER NOT NULL DEFAULT 0,     -- set by app if overdue
+    -- Meta
+    notes               TEXT,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
 );
-
-insertInstallment:
-INSERT INTO installment VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
-updateInstallmentPayment:
-UPDATE installment SET
-    remaining_amount = remaining_amount - ?,
-    paid_months = paid_months + 1,
-    next_due_date = ?,
-    is_completed = (CASE WHEN paid_months + 1 >= total_months THEN 1 ELSE 0 END)
-WHERE id = ?;
-
-getAllInstallments:
-SELECT * FROM installment ORDER BY next_due_date ASC;
-
-getActiveInstallments:
-SELECT * FROM installment WHERE is_completed = 0 ORDER BY next_due_date ASC;
-
-getInstallmentById:
-SELECT * FROM installment WHERE id = ?;
-
-getOverdueInstallments:
-SELECT * FROM installment
+ 
+CREATE TABLE IF NOT EXISTS installment_payment (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    plan_id     TEXT    NOT NULL REFERENCES installment_plan(id) ON DELETE RESTRICT,
+    amount      REAL    NOT NULL,
+    account_type TEXT   NOT NULL,   -- 'CASH' | 'BANK'
+    account_id  TEXT    NOT NULL,
+    notes       TEXT,
+    paid_at     INTEGER NOT NULL
+);
+ 
+CREATE INDEX IF NOT EXISTS idx_emi_customer      ON installment_plan(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_emi_due           ON installment_plan(next_due_date ASC) WHERE is_completed = 0;
+CREATE INDEX IF NOT EXISTS idx_emi_status        ON installment_plan(is_completed, is_defaulted);
+CREATE INDEX IF NOT EXISTS idx_emi_payment_plan  ON installment_payment(plan_id, paid_at ASC);
+ 
+insertInstallmentPlan:
+INSERT INTO installment_plan (id, plan_number, sale_id, customer_id, customer_name, customer_phone, customer_cnic, customer_address, product_id, product_name, imei, total_amount, down_payment, financed_amount, installment_amount, total_installments, paid_installments, paid_amount, remaining_amount, frequency, start_date, next_due_date, is_completed, is_defaulted, notes, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?);
+ 
+insertInstallmentPayment:
+INSERT INTO installment_payment (id, plan_id, amount, account_type, account_id, notes, paid_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+ 
+-- Update plan after each payment
+updatePlanOnPayment:
+UPDATE installment_plan
+SET paid_amount       = paid_amount + :amount,
+    remaining_amount  = ROUND(financed_amount - (paid_amount - down_payment + :amount), 2),
+    paid_installments = paid_installments + 1,
+    next_due_date     = :nextDueDate,
+    is_completed      = CASE WHEN paid_installments + 1 >= total_installments THEN 1 ELSE 0 END,
+    updated_at        = :now
+WHERE id = :planId;
+ 
+markPlanDefaulted:
+UPDATE installment_plan SET is_defaulted = 1, updated_at = ? WHERE id = ?;
+ 
+markPlanCompleted:
+UPDATE installment_plan SET is_completed = 1, remaining_amount = 0.0, updated_at = ? WHERE id = ?;
+ 
+getPlanById:
+SELECT * FROM installment_plan WHERE id = ?;
+ 
+getPlanPayments:
+SELECT * FROM installment_payment WHERE plan_id = ? ORDER BY paid_at ASC;
+ 
+getAllActivePlans:
+SELECT * FROM installment_plan WHERE is_completed = 0 ORDER BY next_due_date ASC;
+ 
+getOverduePlans:
+SELECT * FROM installment_plan
 WHERE is_completed = 0 AND next_due_date < ?
 ORDER BY next_due_date ASC;
+ 
+getPlansByCustomer:
+SELECT * FROM installment_plan
+WHERE customer_id = ?
+ORDER BY created_at DESC;
+ 
+getTotalOutstandingInstallments:
+SELECT COALESCE(SUM(remaining_amount), 0.0)
+FROM installment_plan WHERE is_completed = 0;
+ 

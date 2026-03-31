@@ -16,10 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
-import androidx.paging.compose.LazyPagingItems
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.cash.paging.compose.LazyPagingItems
+import app.cash.paging.compose.collectAsLazyPagingItems
+import app.cash.paging.compose.itemKey
 import com.matechmatrix.shopflowpos.core.model.Product
 import com.matechmatrix.shopflowpos.core.model.enums.ProductCategory
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
@@ -60,11 +60,10 @@ fun InventoryScreen(
             ) { Icon(Icons.Rounded.Add, "Add Product") }
         },
         containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -202,12 +201,12 @@ private fun InventoryHeader(lowStockCount: Int, currencySymbol: String) {
         verticalAlignment     = Alignment.CenterVertically
     ) {
         Column {
-            Text(
-                "Inventory",
-                style      = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color      = TextPrimary
-            )
+//            Text(
+//                "Inventory",
+//                style      = MaterialTheme.typography.headlineSmall,
+//                fontWeight = FontWeight.Bold,
+//                color      = TextPrimary
+//            )
         }
         if (lowStockCount > 0) {
             BadgeChip(

@@ -34,4 +34,6 @@ interface InventoryRepository {
 
     // ── Suppliers ─────────────────────────────────────────────────────────────
     suspend fun getAllSuppliers(): AppResult<List<Supplier>>
+    suspend fun searchSuppliers(query: String): AppResult<List<Supplier>>
+    suspend fun getSupplierById(id: String): AppResult<Supplier>
 }

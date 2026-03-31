@@ -9,6 +9,8 @@ enum class ExpenseCategory(val displayName: String) {
     UTILITIES("Utilities"),
     SUPPLIES("Supplies"),
     MARKETING("Marketing"),
-    REPAIR("Repair"),
+    REPAIR("Repair / Maintenance"),
+    TRANSPORT("Transport"),
+    TAXES("Taxes / Government"),
     OTHER("Other")
 }

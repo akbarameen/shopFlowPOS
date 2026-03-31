@@ -1,6 +1,7 @@
 package com.matechmatrix.shopflowpos.core.common.util
 
 import kotlinx.datetime.*
+import kotlin.time.ExperimentalTime
 
 object DateTimeUtils {
 
@@ -16,6 +17,7 @@ object DateTimeUtils {
     fun todayString(): String =
         Clock.System.todayIn(TimeZone.currentSystemDefault()).toString() // "2024-03-15"
 
+    @OptIn(ExperimentalTime::class)
     fun todayStartMillis(): Long {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         return today.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
@@ -37,6 +39,7 @@ object DateTimeUtils {
         return Pair(weekStart, todayEndMillis())
     }
 
+    @OptIn(ExperimentalTime::class)
     fun thisMonthRange(): Pair<Long, Long> {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         val monthStart = LocalDate(today.year, today.month, 1)
@@ -44,6 +47,7 @@ object DateTimeUtils {
             .toEpochMilliseconds()
         return Pair(monthStart, todayEndMillis())
     }
+    @OptIn(ExperimentalTime::class)
     fun thisYearRange(): Pair<Long, Long> {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         // Create a date for January 1st of the current year
@@ -53,6 +57,7 @@ object DateTimeUtils {
 
         return Pair(yearStart, todayEndMillis())
     }
+    @OptIn(ExperimentalTime::class)
     fun dateStringToRange(dateString: String): Pair<Long, Long> {
         // dateString format: "yyyy-MM-dd"
         val date = LocalDate.parse(dateString)

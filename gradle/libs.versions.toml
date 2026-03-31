@@ -27,7 +27,7 @@ runner = "1.7.0"
 core = "1.7.0"
 compose-icons = "1.7.3"
 material3WindowSizeClass = "1.4.0"
-paging = "3.4.2"
+paging = "3.3.0-alpha02-0.5.1"
 
 [libraries]
 # ─── Existing ────────────────────────────────────────────────────────────────
@@ -49,11 +49,6 @@ compose-ui                        = { module = "org.jetbrains.compose.ui:ui",   
 compose-components-resources      = { module = "org.jetbrains.compose.components:components-resources",       version.ref = "composeMultiplatform" }
 compose-uiToolingPreview          = { module = "org.jetbrains.compose.ui:ui-tooling-preview",                 version.ref = "composeMultiplatform" }
 kotlinx-coroutinesSwing           = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing",              version.ref = "kotlinx-coroutines" }
-
-# ─── NEW: Icons ─────────────────────────────────────────────────────────────
-#compose-icons-extended            = { module = "org.jetbrains.compose.components:components-ui-tooling-preview", version.ref = "composeMultiplatform" }
-## Correcting icon dependencies for Compose Multiplatform
-#material-icons-extended           = { module = "org.jetbrains.compose.material:material-icons-extended",      version.ref = "composeMultiplatform" }
 
 compose-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "compose-icons" }
 compose-icons-core = { module = "org.jetbrains.compose.material:material-icons-core", version.ref = "compose-icons" }
@@ -96,8 +91,8 @@ androidx-runner = { group = "androidx.test", name = "runner", version.ref = "run
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 androidx-material3-window-size-class1 = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSizeClass" }
 
-paging-common = { module = "androidx.paging:paging-common", version.ref = "paging" }
-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
+paging-common = { module = "app.cash.paging:paging-common", version.ref = "paging" }
+paging-compose = { module = "app.cash.paging:paging-compose-common", version.ref = "paging" }
 
 [plugins]
 # ─── Existing ────────────────────────────────────────────────────────────────

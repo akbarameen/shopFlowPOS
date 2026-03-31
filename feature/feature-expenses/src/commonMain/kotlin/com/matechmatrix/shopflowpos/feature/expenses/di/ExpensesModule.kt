@@ -8,5 +8,5 @@ import org.koin.dsl.module
 
 val expensesModule = module {
     single<ExpensesRepository> { ExpensesRepositoryImpl(db = get()) }
-    viewModel { ExpensesViewModel(get()) }
+    viewModel { ExpensesViewModel(repo = get()) }
 }

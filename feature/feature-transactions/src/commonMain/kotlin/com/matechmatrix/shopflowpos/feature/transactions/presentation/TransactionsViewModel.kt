@@ -4,7 +4,7 @@ import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
 import com.matechmatrix.shopflowpos.core.common.base.MviViewModel
 import com.matechmatrix.shopflowpos.feature.transactions.domain.repository.TransactionsRepository
-import kotlin.time.Clock
+import kotlinx.datetime.Clock
 
 class TransactionsViewModel(
     private val repo: TransactionsRepository
@@ -37,7 +37,8 @@ class TransactionsViewModel(
         val start = range.first
         val end = range.second
 
-        when (val r = repo.getSalesByDateRange(start, end)) {
+        val r = repo.getSalesByDateRange(start, end)
+        when (r) {
             is AppResult.Success -> {
                 val sorted = r.data.sortedByDescending { it.soldAt }
                 setState {

@@ -1,116 +1,217 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: sale.sq
+-- Covers: sale · sale_item · sale_payment
+--
+-- FLOW (all inside one db.transaction { } block):
+--   1. incrementSequence('INV') + getSequence → build invoice_number
+--   2. insertSale
+--   3. insertSaleItem (× n)
+--   4. insertSalePayment (1 or more: cash + bank in same sale = 2 rows)
+--      + updateSaleOnPayment (set paid_amount, due_amount, payment_status)
+--      + updateCashBalance / updateBankBalance
+--      + insertLedgerEntry (CREDIT)
+--   5. For IMEI products → markAsSold; for qty products → decrementStock
+--   6. insertStockMovement (× n)  [type = SALE]
+--   7. If customer known → updateCustomerAfterSale
+-- ════════════════════════════════════════════════════════════════════════════
+ 
 CREATE TABLE IF NOT EXISTS sale (
     id              TEXT    NOT NULL PRIMARY KEY,
-    invoice_number  TEXT    NOT NULL,
-    customer_id     TEXT,
-    customer_name   TEXT,
-    subtotal        REAL    NOT NULL DEFAULT 0.0,
-    discount        REAL    NOT NULL DEFAULT 0.0,
-    total_amount    REAL    NOT NULL DEFAULT 0.0,
-    cost_total      REAL    NOT NULL DEFAULT 0.0,
-    gross_profit    REAL    NOT NULL DEFAULT 0.0,
-    payment_method  TEXT    NOT NULL,
-    cash_amount     REAL    NOT NULL DEFAULT 0.0,
-    bank_amount     REAL    NOT NULL DEFAULT 0.0,
-    bank_account_id TEXT,
-    due_amount      REAL    NOT NULL DEFAULT 0.0,
-    due_date        INTEGER,
+    invoice_number  TEXT    NOT NULL UNIQUE,            -- INV-00001
+    -- Customer (FK optional for walk-in; snapshot fields always filled)
+    customer_id     TEXT,                               -- NULL for walk-in
+    customer_name   TEXT    NOT NULL DEFAULT 'Walk-in Customer',
+    customer_phone  TEXT    NOT NULL DEFAULT '',
+    customer_cnic   TEXT,
+    customer_address TEXT   NOT NULL DEFAULT '',
+    -- Financials
+    subtotal        REAL    NOT NULL DEFAULT 0.0,       -- sum of line_totals before discount
+    discount_amount REAL    NOT NULL DEFAULT 0.0,       -- overall invoice discount
+    tax_amount      REAL    NOT NULL DEFAULT 0.0,       -- GST/VAT (0 unless enabled)
+    total_amount    REAL    NOT NULL DEFAULT 0.0,       -- subtotal - discount + tax
+    cost_total      REAL    NOT NULL DEFAULT 0.0,       -- sum of (unit_cost * qty) for COGS
+    gross_profit    REAL    NOT NULL DEFAULT 0.0,       -- total_amount - cost_total
+    paid_amount     REAL    NOT NULL DEFAULT 0.0,       -- sum of sale_payment.amount
+    due_amount      REAL    NOT NULL DEFAULT 0.0,       -- total_amount - paid_amount
+    -- Payment status
+    payment_status  TEXT    NOT NULL DEFAULT 'PAID',
+    -- 'PAID' | 'PARTIAL' | 'UNPAID' | 'RETURNED' | 'CANCELLED'
+    due_date        INTEGER,                            -- date full payment is expected
+    -- Sale status (separate from payment)
     status          TEXT    NOT NULL DEFAULT 'COMPLETED',
+    -- 'COMPLETED' | 'PARTIALLY_RETURNED' | 'RETURNED' | 'CANCELLED'
     notes           TEXT,
-    sold_at         INTEGER NOT NULL
+    sold_at         INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL
 );
-
+ 
 CREATE TABLE IF NOT EXISTS sale_item (
     id              TEXT    NOT NULL PRIMARY KEY,
-    sale_id         TEXT    NOT NULL,
+    sale_id         TEXT    NOT NULL REFERENCES sale(id) ON DELETE CASCADE,
     product_id      TEXT    NOT NULL,
-    product_name    TEXT    NOT NULL,
+    product_name    TEXT    NOT NULL,   -- snapshot
+    imei            TEXT,               -- snapshot for IMEI-tracked products
+    category        TEXT    NOT NULL DEFAULT '',
     quantity        INTEGER NOT NULL,
-    cost_price      REAL    NOT NULL,
-    selling_price   REAL    NOT NULL,
-    discount        REAL    NOT NULL DEFAULT 0.0,
-    line_total      REAL    NOT NULL,
-    FOREIGN KEY (sale_id) REFERENCES sale(id) ON DELETE CASCADE
+    unit_cost       REAL    NOT NULL,   -- cost at time of sale (for COGS)
+    unit_price      REAL    NOT NULL,   -- selling price at time of sale
+    discount        REAL    NOT NULL DEFAULT 0.0,   -- per-item discount
+    line_total      REAL    NOT NULL    -- (unit_price - discount) * quantity
 );
-
+ 
+-- One row per payment event (enables split cash+bank and multiple partial payments)
+CREATE TABLE IF NOT EXISTS sale_payment (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    sale_id         TEXT    NOT NULL REFERENCES sale(id) ON DELETE RESTRICT,
+    amount          REAL    NOT NULL,
+    account_type    TEXT    NOT NULL,   -- 'CASH' | 'BANK'
+    account_id      TEXT    NOT NULL,   -- cash_account.id or bank_account.id
+    reference_number TEXT,              -- transaction ID, cheque number, etc.
+    notes           TEXT,
+    paid_at         INTEGER NOT NULL
+);
+ 
+CREATE INDEX IF NOT EXISTS idx_sale_customer     ON sale(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sale_date         ON sale(sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sale_payment_stat ON sale(payment_status, sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sale_status       ON sale(status, sold_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sale_invoice      ON sale(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_sale_item_sale    ON sale_item(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_item_product ON sale_item(product_id);
+CREATE INDEX IF NOT EXISTS idx_sale_item_imei    ON sale_item(imei) WHERE imei IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sale_payment_sale ON sale_payment(sale_id, paid_at ASC);
+ 
 insertSale:
-INSERT INTO sale VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+INSERT INTO sale (id, invoice_number, customer_id, customer_name, customer_phone, customer_cnic, customer_address, subtotal, discount_amount, tax_amount, total_amount, cost_total, gross_profit, paid_amount, due_amount, payment_status, due_date, status, notes, sold_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
 insertSaleItem:
-INSERT INTO sale_item VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+INSERT INTO sale_item (id, sale_id, product_id, product_name, imei, category, quantity, unit_cost, unit_price, discount, line_total)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
+insertSalePayment:
+INSERT INTO sale_payment (id, sale_id, amount, account_type, account_id, reference_number, notes, paid_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+ 
+-- Recalculate running balance on the sale when a payment arrives
+updateSaleOnPayment:
+UPDATE sale
+SET paid_amount    = paid_amount + :amount,
+    due_amount     = ROUND(total_amount - paid_amount - :amount, 2),
+    payment_status = CASE
+        WHEN (paid_amount + :amount) >= total_amount THEN 'PAID'
+        WHEN (paid_amount + :amount) > 0             THEN 'PARTIAL'
+        ELSE 'UNPAID'
+    END,
+    updated_at = :now
+WHERE id = :saleId;
+ 
+updateSaleStatus:
+UPDATE sale SET status = ?, updated_at = ? WHERE id = ?;
+ 
 getSaleById:
 SELECT * FROM sale WHERE id = ?;
-
-getSaleItemsBySaleId:
+ 
+getSaleItems:
 SELECT * FROM sale_item WHERE sale_id = ?;
-
+ 
+getSalePayments:
+SELECT * FROM sale_payment WHERE sale_id = ? ORDER BY paid_at ASC;
+ 
 getSalesByDateRange:
 SELECT * FROM sale WHERE sold_at BETWEEN ? AND ? ORDER BY sold_at DESC;
-
+ 
+getSalesByCustomer:
+SELECT * FROM sale
+WHERE customer_id = ?
+ORDER BY sold_at DESC
+LIMIT :limit OFFSET :offset;
+ 
+getSalesWithDue:
+SELECT * FROM sale
+WHERE due_amount > 0
+  AND payment_status IN ('UNPAID', 'PARTIAL')
+  AND status NOT IN ('RETURNED', 'CANCELLED')
+ORDER BY due_date ASC;
+ 
+-- ── Dashboard / Report Queries ────────────────────────────────────────────────
+ 
 getDailyRevenue:
 SELECT COALESCE(SUM(total_amount), 0.0) FROM sale
-WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
-
+WHERE sold_at BETWEEN ? AND ?
+  AND status NOT IN ('RETURNED', 'CANCELLED');
+ 
 getDailyGrossProfit:
 SELECT COALESCE(SUM(gross_profit), 0.0) FROM sale
-WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
-
+WHERE sold_at BETWEEN ? AND ?
+  AND status NOT IN ('RETURNED', 'CANCELLED');
+ 
 getDailySalesCount:
 SELECT COUNT(*) FROM sale
-WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
-
-getDailyCashRevenue:
-SELECT COALESCE(SUM(cash_amount), 0.0) FROM sale
-WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
-
-getDailyBankRevenue:
-SELECT COALESCE(SUM(bank_amount), 0.0) FROM sale
-WHERE sold_at BETWEEN ? AND ? AND status != 'RETURNED';
-
-updateSaleStatus:
-UPDATE sale SET status = ? WHERE id = ?;
-
-countTodaySales:
-SELECT COUNT(*) FROM sale WHERE sold_at BETWEEN ? AND ?;
-
-getTopProductsByDateRange:
-SELECT product_id, product_name,
-       SUM(quantity) AS total_qty,
-       SUM(line_total) AS total_revenue
+WHERE sold_at BETWEEN ? AND ?
+  AND status NOT IN ('RETURNED', 'CANCELLED');
+ 
+getDailyPaidRevenue:
+SELECT COALESCE(SUM(amount), 0.0) FROM sale_payment
+WHERE paid_at BETWEEN ? AND ?;
+ 
+getDailyCashCollected:
+SELECT COALESCE(SUM(amount), 0.0) FROM sale_payment
+WHERE account_type = 'CASH' AND paid_at BETWEEN ? AND ?;
+ 
+getDailyBankCollected:
+SELECT COALESCE(SUM(amount), 0.0) FROM sale_payment
+WHERE account_type = 'BANK' AND paid_at BETWEEN ? AND ?;
+ 
+getTopSellingProductsByDateRange:
+SELECT
+    si.product_id,
+    si.product_name,
+    SUM(si.quantity)  AS total_qty,
+    SUM(si.line_total) AS total_revenue,
+    SUM(si.unit_cost * si.quantity) AS total_cost
 FROM sale_item si
 JOIN sale s ON si.sale_id = s.id
-WHERE s.sold_at BETWEEN ? AND ? AND s.status != 'RETURNED'
-GROUP BY product_id, product_name
+WHERE s.sold_at BETWEEN ? AND ?
+  AND s.status NOT IN ('RETURNED', 'CANCELLED')
+GROUP BY si.product_id, si.product_name
 ORDER BY total_revenue DESC
 LIMIT 10;
-
-getDues:
-SELECT * FROM sale WHERE due_amount > 0 AND status != 'RETURNED' ORDER BY due_date ASC;
-
--- New queries for dynamic graphs
+ 
 getWeeklyRevenue:
-SELECT 
+SELECT
     strftime('%Y-%W', sold_at / 1000, 'unixepoch') AS week,
-    SUM(total_amount) AS revenue
+    COALESCE(SUM(total_amount), 0.0)               AS revenue,
+    COALESCE(SUM(gross_profit), 0.0)               AS profit
 FROM sale
-WHERE sold_at >= ? AND status != 'RETURNED'
+WHERE sold_at >= ? AND status NOT IN ('RETURNED', 'CANCELLED')
 GROUP BY week
 ORDER BY week ASC;
-
+ 
 getMonthlyRevenue:
-SELECT 
+SELECT
     strftime('%Y-%m', sold_at / 1000, 'unixepoch') AS month,
-    SUM(total_amount) AS revenue
+    COALESCE(SUM(total_amount), 0.0)               AS revenue,
+    COALESCE(SUM(gross_profit), 0.0)               AS profit,
+    COUNT(*)                                        AS sale_count
 FROM sale
-WHERE sold_at >= ? AND status != 'RETURNED'
+WHERE sold_at >= ? AND status NOT IN ('RETURNED', 'CANCELLED')
 GROUP BY month
 ORDER BY month ASC;
-
+ 
 getYearlyRevenue:
-SELECT 
+SELECT
     strftime('%Y', sold_at / 1000, 'unixepoch') AS year,
-    SUM(total_amount) AS revenue
+    COALESCE(SUM(total_amount), 0.0)            AS revenue,
+    COALESCE(SUM(gross_profit), 0.0)            AS profit,
+    COUNT(*)                                    AS sale_count
 FROM sale
-WHERE sold_at >= ? AND status != 'RETURNED'
+WHERE sold_at >= ? AND status NOT IN ('RETURNED', 'CANCELLED')
 GROUP BY year
 ORDER BY year ASC;
+ 
+getTotalCustomerDues:
+SELECT COALESCE(SUM(due_amount), 0.0) FROM sale
+WHERE payment_status IN ('UNPAID', 'PARTIAL')
+  AND status NOT IN ('RETURNED', 'CANCELLED');
+ 

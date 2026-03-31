@@ -3,18 +3,21 @@ CREATE TABLE IF NOT EXISTS settings (
     value   TEXT NOT NULL
 );
 
--- Keys used by the app:
--- 'activation_token'   → license activation token
--- 'shop_name'          → shop display name
--- 'shop_address'       → shop address
--- 'shop_phone'         → shop phone
--- 'currency_symbol'    → "Rs." by default
--- 'theme'              → "light" or "dark"
--- 'analytics_visible'  → "true" or "false" (dashboard toggle)
--- 'show_cost_price'    → "true" or "false" (inventory)
--- 'default_deduction_percent' → e.g. "10.0"
--- 'low_stock_alert'    → "3" (threshold)
--- 'initial_cash'       → set on first run
+-- Seed keys (insert in DatabaseProvider after first open):
+-- 'shop_name'                 → shop display name
+-- 'shop_address'              → shop address
+-- 'shop_phone'                → shop phone
+-- 'shop_logo_uri'             → local URI of logo image
+-- 'currency_symbol'           → "Rs." (default)
+-- 'currency_code'             → "PKR" (default)
+-- 'theme'                     → "light" | "dark" | "system"
+-- 'show_cost_price'           → "true" | "false"
+-- 'default_deduction_percent' → "10.0"  (for sale returns)
+-- 'low_stock_threshold'       → "3"
+-- 'receipt_footer'            → custom text printed on receipts
+-- 'tax_rate'                  → "0.0"   (GST/VAT %, 0 = disabled)
+-- 'activation_token'          → license key
+-- 'initial_cash_balance'      → set once on first run
 
 upsertSetting:
 INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?);

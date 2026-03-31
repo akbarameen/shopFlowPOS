@@ -1,5 +1,8 @@
 package com.matechmatrix.shopflowpos.feature.pos.presentation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,8 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,12 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,57 +29,160 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import com.matechmatrix.shopflowpos.core.common.platform.rememberReceiptSharer
 import com.matechmatrix.shopflowpos.core.common.util.CurrencyFormatter
-import com.matechmatrix.shopflowpos.core.model.BankAccount
-import com.matechmatrix.shopflowpos.core.model.CartItem
-import com.matechmatrix.shopflowpos.core.model.Customer
-import com.matechmatrix.shopflowpos.core.model.Product
+import com.matechmatrix.shopflowpos.core.common.util.ReceiptBuilder
+import com.matechmatrix.shopflowpos.core.model.*
 import com.matechmatrix.shopflowpos.core.model.enums.PaymentMethod
 import com.matechmatrix.shopflowpos.core.model.enums.ProductCategory
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
 import com.matechmatrix.shopflowpos.core.ui.theme.*
 import org.koin.compose.viewmodel.koinViewModel
-
-@OptIn(ExperimentalMaterial3Api::class)
+import app.cash.paging.compose.LazyPagingItems
+import app.cash.paging.compose.collectAsLazyPagingItems
+import app.cash.paging.compose.itemKey
 @Composable
 fun PosScreen(
     windowSize    : AppWindowSize,
     navigateChild : (String) -> Unit = {},
     viewModel     : PosViewModel = koinViewModel()
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    var showCartSheet by remember { mutableStateOf(false) }
+    val state         by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarState = remember { SnackbarHostState() }
+    val pagedProducts = state.pagedProducts.collectAsLazyPagingItems()
 
     LaunchedEffect(Unit) {
-        viewModel.effect.collect { effect ->
-            when (effect) {
-                is PosEffect.ShowToast -> snackbarHostState.showSnackbar(effect.message)
-            }
+        viewModel.effect.collect { e ->
+            if (e is PosEffect.ShowToast) snackbarState.showSnackbar(e.message)
         }
     }
 
     Scaffold(
-        snackbarHost   = { SnackbarHost(snackbarHostState) },
+        snackbarHost   = { SnackbarHost(snackbarState) },
         containerColor = MaterialTheme.colorScheme.background
     ) {
-        Box(Modifier.fillMaxSize()) {
-            if (state.isLoading) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center), color = Primary)
-                return@Box
+        if (state.isLoading) {
+            Box(Modifier.fillMaxSize().padding(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Primary)
             }
-            if (windowSize == AppWindowSize.COMPACT) {
-                PosPhoneLayout(state = state, viewModel = viewModel, onShowCart = { showCartSheet = true })
-            } else {
-                PosWideLayout(state = state, viewModel = viewModel)
+            return@Scaffold
+        }
+
+        if (windowSize == AppWindowSize.COMPACT) {
+            PosPhoneLayout(
+                state         = state,
+                pagedProducts = pagedProducts,
+                viewModel     = viewModel,
+                modifier      = Modifier.padding()
+            )
+        } else {
+            PosWideLayout(
+                state         = state,
+                pagedProducts = pagedProducts,
+                viewModel     = viewModel,
+                modifier      = Modifier
+            )
+        }
+    }
+
+    // ── Checkout sheet ────────────────────────────────────────────────────────
+    if (state.showCheckoutSheet) {
+        CheckoutBottomSheet(state = state, viewModel = viewModel)
+    }
+
+    // ── Receipt dialog ────────────────────────────────────────────────────────
+    state.receiptData?.let { receipt ->
+        ReceiptDialog(
+            receipt   = receipt,
+            currency  = state.currencySymbol,
+            onNewSale = { viewModel.onIntent(PosIntent.DismissReceipt) }
+        )
+    }
+
+    // ── Error dialog ──────────────────────────────────────────────────────────
+    state.error?.let { err ->
+        AlertDialog(
+            onDismissRequest = { viewModel.onIntent(PosIntent.ClearError) },
+            icon    = { Icon(Icons.Rounded.ErrorOutline, null, tint = Danger) },
+            title   = { Text("Error", fontWeight = FontWeight.Bold) },
+            text    = { Text(err) },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.onIntent(PosIntent.ClearError) },
+                    colors  = ButtonDefaults.buttonColors(containerColor = Primary)
+                ) { Text("OK") }
+            }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phone Layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PosPhoneLayout(
+    state         : PosState,
+    pagedProducts : LazyPagingItems<Product>,
+    viewModel     : PosViewModel,
+    modifier      : Modifier = Modifier
+) {
+    var showCartSheet by remember { mutableStateOf(false) }
+
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ProductSearchBar(state, viewModel)
+            CategoryFilterRow(state, viewModel)
+            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = true)
+        }
+
+        // Floating cart button
+        AnimatedVisibility(
+            visible  = !state.cartIsEmpty,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).navigationBarsPadding(),
+            enter    = fadeIn() + slideInVertically { it }
+        ) {
+            Surface(
+                onClick          = { showCartSheet = true },
+                modifier         = Modifier.fillMaxWidth().height(62.dp),
+                shape            = RoundedCornerShape(18.dp),
+                color            = Primary,
+                shadowElevation  = 10.dp,
+                tonalElevation   = 4.dp
+            ) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            Modifier.size(34.dp).clip(CircleShape).background(Color.White.copy(0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("${state.itemCount}", color = Color.White, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Text("Review Order", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Text(
+                        "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netTotal)}",
+                        color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp
+                    )
+                }
             }
         }
     }
 
-    if (showCartSheet && windowSize == AppWindowSize.COMPACT) {
+    if (showCartSheet) {
         CartBottomSheet(
-            state = state,
+            state     = state,
             viewModel = viewModel,
             onDismiss = { showCartSheet = false },
             onCheckout = {
@@ -90,83 +191,148 @@ fun PosScreen(
             }
         )
     }
-
-    if (state.showCheckoutSheet) {
-        CheckoutBottomSheet(state = state, viewModel = viewModel)
-    }
-
-    if (state.showSuccessDialog && state.lastSale != null) {
-        SaleSuccessDialog(state = state, onDismiss = { viewModel.onIntent(PosIntent.DismissSuccess) })
-    }
-
-    state.error?.let { err ->
-        AlertDialog(
-            onDismissRequest = { /* viewModel.onIntent(PosIntent.ClearError) */ },
-            title = { Text("Error", fontWeight = FontWeight.Bold) },
-            text  = { Text(err) },
-            confirmButton = { TextButton(onClick = { /* viewModel.onIntent(PosIntent.ClearError) */ }) { Text("OK") } }
-        )
-    }
 }
 
-// ─── Phone layout ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Wide Layout (Tablet / Desktop)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun PosPhoneLayout(state: PosState, viewModel: PosViewModel, onShowCart: () -> Unit) {
-    Box(Modifier.fillMaxSize()) {
+private fun PosWideLayout(
+    state         : PosState,
+    pagedProducts : LazyPagingItems<Product>,
+    viewModel     : PosViewModel,
+    modifier      : Modifier = Modifier
+) {
+    Row(modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            Modifier.weight(0.6f).fillMaxHeight().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ProductSearchBar(state, viewModel)
             CategoryFilterRow(state, viewModel)
-            ProductGrid(state, viewModel, compact = true)
+            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = false)
         }
+        VerticalDivider(modifier = Modifier.fillMaxHeight().width(1.dp), color = BorderFaint)
+        CartPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(0.4f))
+    }
+}
 
-        // Floating action button for cart on mobile
-        if (state.cart.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .navigationBarsPadding()
-            ) {
-                Surface(
-                    onClick = onShowCart,
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    color = Primary,
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+// ─────────────────────────────────────────────────────────────────────────────
+// Search + Filter
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ProductSearchBar(state: PosState, viewModel: PosViewModel) {
+    TextField(
+        value         = state.searchQuery,
+        onValueChange = { viewModel.onIntent(PosIntent.Search(it)) },
+        modifier      = Modifier.fillMaxWidth(),
+        placeholder   = { Text("Search by name, IMEI, barcode…", color = TextMuted) },
+        leadingIcon   = { Icon(Icons.Rounded.Search, null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
+        trailingIcon  = if (state.searchQuery.isNotBlank()) ({
+            IconButton(onClick = { viewModel.onIntent(PosIntent.Search("")) }) {
+                Icon(Icons.Rounded.Clear, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+            }
+        }) else null,
+        singleLine    = true,
+        shape         = RoundedCornerShape(14.dp),
+        colors        = TextFieldDefaults.colors(
+            focusedContainerColor   = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedIndicatorColor   = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+        )
+    )
+}
+
+@Composable
+private fun CategoryFilterRow(state: PosState, viewModel: PosViewModel) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding        = PaddingValues(horizontal = 2.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = state.selectedCategory == null,
+                onClick  = { viewModel.onIntent(PosIntent.FilterCategory(null)) },
+                label    = { Text("All") },
+                colors   = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Primary,
+                    selectedLabelColor     = Color.White
+                )
+            )
+        }
+        ProductCategory.entries.forEach { cat ->
+            item(key = cat.name) {
+                val sel = state.selectedCategory == cat
+                FilterChip(
+                    selected = sel,
+                    onClick  = { viewModel.onIntent(PosIntent.FilterCategory(if (sel) null else cat)) },
+                    label    = { Text("${cat.emoji} ${cat.displayName}") },
+                    colors   = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Primary,
+                        selectedLabelColor     = Color.White
+                    )
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Grid (paged)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ProductGrid(
+    pagedProducts : LazyPagingItems<Product>,
+    viewModel     : PosViewModel,
+    compact       : Boolean
+) {
+    when (pagedProducts.loadState.refresh) {
+        is LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Primary, modifier = Modifier.size(32.dp))
+        }
+        is LoadState.Error   -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Rounded.ErrorOutline, null, tint = Danger, modifier = Modifier.size(40.dp))
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { pagedProducts.retry() }) { Text("Retry", color = Primary) }
+            }
+        }
+        else -> {
+            if (pagedProducts.itemCount == 0 && pagedProducts.loadState.append.endOfPaginationReached) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "${state.itemCount}",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text("Review Order", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Text(
-                            CurrencyFormatter.formatRs(state.cartTotal),
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 18.sp
+                        Icon(Icons.Rounded.SearchOff, null, tint = TextMuted, modifier = Modifier.size(48.dp))
+                        Text("No products found", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns               = GridCells.Adaptive(if (compact) 110.dp else 150.dp),
+                    verticalArrangement   = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding        = PaddingValues(bottom = 100.dp)
+                ) {
+                    items(count = pagedProducts.itemCount, key = pagedProducts.itemKey { it.id }) { i ->
+                        val product = pagedProducts[i] ?: return@items
+                        PosProductCard(
+                            product = product,
+                            inCart  = 0, // resolved below — peek is non-null
+                            onClick = { viewModel.onIntent(PosIntent.AddToCart(product)) }
                         )
+                    }
+                    if (pagedProducts.loadState.append is LoadState.Loading) {
+                        item {
+                            Box(Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(Modifier.size(20.dp), color = Primary, strokeWidth = 2.dp)
+                            }
+                        }
                     }
                 }
             }
@@ -174,113 +340,21 @@ private fun PosPhoneLayout(state: PosState, viewModel: PosViewModel, onShowCart:
     }
 }
 
-// ─── Wide layout ──────────────────────────────────────────────────────────────
 @Composable
-private fun PosWideLayout(state: PosState, viewModel: PosViewModel) {
-    Row(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.weight(0.6f).fillMaxHeight().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            ProductSearchBar(state, viewModel)
-            CategoryFilterRow(state, viewModel)
-            ProductGrid(state, viewModel, compact = false)
-        }
-        VerticalDivider(modifier = Modifier.fillMaxHeight().width(1.dp), color = BorderColor)
-        CartPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(0.4f))
-    }
-}
-
-// ─── Search bar ───────────────────────────────────────────────────────────────
-@Composable
-private fun ProductSearchBar(state: PosState, viewModel: PosViewModel) {
-    TextField(
-        value = state.searchQuery,
-        onValueChange = { viewModel.onIntent(PosIntent.Search(it)) },
-        modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Search or scan barcode...", color = TextMuted) },
-        leadingIcon  = { Icon(Icons.Rounded.Search, null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
-        trailingIcon = {
-            if (state.searchQuery.isNotBlank()) {
-                IconButton(onClick = { viewModel.onIntent(PosIntent.Search("")) }) {
-                    Icon(Icons.Rounded.Clear, null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                }
-            }
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor   = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            focusedIndicatorColor   = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-        )
-    )
-}
-
-// ─── Category filter ──────────────────────────────────────────────────────────
-@Composable
-private fun CategoryFilterRow(state: PosState, viewModel: PosViewModel) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 2.dp)) {
-        item {
-            FilterChip(
-                selected = state.selectedCategory == null,
-                onClick = { viewModel.onIntent(PosIntent.FilterCategory(null)) },
-                label = { Text("All") }
-            )
-        }
-        items(ProductCategory.entries) { cat ->
-            val selected = state.selectedCategory == cat
-            FilterChip(
-                selected = selected,
-                onClick = { viewModel.onIntent(PosIntent.FilterCategory(if (selected) null else cat)) },
-                label = { Text(cat.name.lowercase().replaceFirstChar { it.uppercase() }) }
-            )
-        }
-    }
-}
-
-// ─── Product grid ─────────────────────────────────────────────────────────────
-@Composable
-private fun ProductGrid(state: PosState, viewModel: PosViewModel, compact: Boolean) {
-    if (state.filteredProducts.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Rounded.SearchOff, null, tint = TextMuted, modifier = Modifier.size(48.dp))
-                Text("No products found", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-            }
-        }
-        return
-    }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = if (compact) 110.dp else 150.dp),
-        verticalArrangement   = Arrangement.spacedBy(10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 100.dp) // Avoid overlap with floating cart
-    ) {
-        items(state.filteredProducts, key = { it.id }) { product ->
-            ProductCard(
-                product = product,
-                inCart  = state.cart.find { it.product.id == product.id }?.quantity ?: 0
-            ) { viewModel.onIntent(PosIntent.AddToCart(product)) }
-        }
-    }
-}
-
-@Composable
-private fun ProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
-    val isOutOfStock = product.stock == 0
+private fun PosProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
+    val outOfStock = product.stock <= 0 && !product.isImeiTracked
     Card(
-        modifier  = Modifier.fillMaxWidth().aspectRatio(0.85f).clickable(enabled = !isOutOfStock, onClick = onClick),
+        modifier  = Modifier.fillMaxWidth().aspectRatio(0.85f).clickable(enabled = !outOfStock, onClick = onClick),
         shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(containerColor = if (isOutOfStock) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
-        border    = if (inCart > 0) BorderStroke(2.dp, Primary) else BorderStroke(1.dp, BorderFaint),
+        colors    = CardDefaults.cardColors(
+            containerColor = if (outOfStock) MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.surface
+        ),
+        border    = if (inCart > 0) BorderStroke(2.dp, Primary) else BorderStroke(0.5.dp, BorderFaint),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Box(Modifier.fillMaxSize()) {
-            Column(
-                Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
                 Box(
                     Modifier.size(38.dp).clip(RoundedCornerShape(12.dp))
                         .background(if (inCart > 0) Primary else PrimaryContainer),
@@ -295,28 +369,42 @@ private fun ProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         product.name,
-                        style    = MaterialTheme.typography.labelMedium,
+                        style      = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color    = if (isOutOfStock) TextMuted else TextPrimary,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis
+                        color      = if (outOfStock) TextMuted else TextPrimary,
+                        maxLines   = 2,
+                        overflow   = TextOverflow.Ellipsis
                     )
+                    if (!product.imei.isNullOrBlank()) {
+                        Text(
+                            product.imei!!,
+                            style   = MaterialTheme.typography.labelSmall,
+                            color   = Primary,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
                         CurrencyFormatter.formatRs(product.sellingPrice),
                         style      = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color      = if (isOutOfStock) TextMuted else Primary
+                        color      = if (outOfStock) TextMuted else Primary
                     )
                     Text(
-                        if (isOutOfStock) "Out of stock" else "${product.stock} in stock",
+                        if (outOfStock) "Out of stock"
+                        else if (product.isImeiTracked) "1 unit"
+                        else "${product.stock} in stock",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isOutOfStock) Danger else TextMuted
+                        color = if (outOfStock) Danger else TextMuted
                     )
                 }
             }
             if (inCart > 0) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(24.dp),
-                    shape = CircleShape, color = Accent, shadowElevation = 2.dp
+                    modifier       = Modifier.align(Alignment.TopEnd).padding(8.dp).size(22.dp),
+                    shape          = CircleShape,
+                    color          = Accent,
+                    shadowElevation = 2.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text("$inCart", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.ExtraBold)
@@ -327,107 +415,241 @@ private fun ProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
     }
 }
 
-// ─── Cart components ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Cart Panel (wide layout)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun CartPanel(state: PosState, viewModel: PosViewModel, modifier: Modifier) {
     Column(
-        modifier = modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(16.dp),
+        modifier            = modifier.fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("🛒 Shopping Cart", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            if (state.cart.isNotEmpty()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Text(
+                "🛒 Cart (${state.itemCount})",
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (!state.cartIsEmpty) {
                 TextButton(onClick = { viewModel.onIntent(PosIntent.ClearCart) }) {
                     Text("Clear", color = Danger, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        if (state.cart.isEmpty()) {
+        if (state.cartIsEmpty) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Icon(Icons.Rounded.ShoppingCartCheckout, null, tint = TextMuted, modifier = Modifier.size(48.dp))
                     Text("Cart is empty", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(state.cart, key = { it.product.id }) { item ->
-                    CartItemRow(item = item, viewModel = viewModel)
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(state.cart.size, key = { state.cart[it].product.id }) { i ->
+                    CartItemRow(state.cart[i], viewModel)
                 }
             }
-
             HorizontalDivider(color = BorderFaint)
-
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total Items", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-                    Text("${state.itemCount}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                if (state.taxRate > 0) {
+                    SummaryRow("Subtotal", "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.subtotal)}")
+                    SummaryRow("Tax (${state.taxRate.toInt()}%)", "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.taxAmount)}")
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Subtotal", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-                    Text(
-                        CurrencyFormatter.formatRs(state.cartTotal),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold, color = Primary
-                    )
-                }
+                SummaryRow(
+                    label  = "Total",
+                    value  = "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netTotal)}",
+                    bold   = true
+                )
             }
-
             Button(
-                onClick = { viewModel.onIntent(PosIntent.OpenCheckout) },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                onClick   = { viewModel.onIntent(PosIntent.OpenCheckout) },
+                modifier  = Modifier.fillMaxWidth().height(56.dp),
+                shape     = RoundedCornerShape(16.dp),
+                colors    = ButtonDefaults.buttonColors(containerColor = Primary),
                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
             ) {
                 Icon(Icons.Rounded.PointOfSale, null)
                 Spacer(Modifier.width(12.dp))
-                Text("Checkout Now", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("Checkout", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
+@Composable
+private fun SummaryRow(label: String, value: String, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = TextPrimary)
+        Text(value, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (bold) FontWeight.ExtraBold else FontWeight.SemiBold,
+            color = if (bold) Primary else TextPrimary)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cart Item Row
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CartItemRow(item: CartItem, viewModel: PosViewModel) {
+    var showDiscountField by remember(item.product.id) { mutableStateOf(false) }
+    var discountInput     by remember(item.product.id) { mutableStateOf(if (item.discount > 0) item.discount.toLong().toString() else "") }
+
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(PrimaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Inventory2, null, tint = Primary, modifier = Modifier.size(18.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    item.product.name,
+                    style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                if (!item.product.imei.isNullOrBlank()) {
+                    Text(item.product.imei!!, style = MaterialTheme.typography.labelSmall, color = Primary)
+                }
+                Text(
+                    "${CurrencyFormatter.formatRs(item.lineTotal)}",
+                    style = MaterialTheme.typography.labelSmall, color = TextMuted
+                )
+            }
+
+            // Quantity controls
+            if (!item.product.isImeiTracked) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IconButton(
+                        onClick  = { viewModel.onIntent(PosIntent.ChangeQty(item.product.id, -1)) },
+                        modifier = Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
+                    ) { Icon(Icons.Rounded.Remove, null, modifier = Modifier.size(12.dp)) }
+                    Text("${item.quantity}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.widthIn(min = 20.dp), textAlign = TextAlign.Center)
+                    IconButton(
+                        onClick  = { viewModel.onIntent(PosIntent.ChangeQty(item.product.id, +1)) },
+                        modifier = Modifier.size(26.dp).clip(CircleShape).background(Primary)
+                    ) { Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(12.dp)) }
+                }
+            }
+
+            // Discount toggle + remove
+            Row {
+                IconButton(
+                    onClick  = { showDiscountField = !showDiscountField },
+                    modifier = Modifier.size(26.dp)
+                ) { Icon(Icons.Rounded.Discount, null, tint = if (item.discount > 0) Accent else TextMuted, modifier = Modifier.size(14.dp)) }
+                IconButton(
+                    onClick  = { viewModel.onIntent(PosIntent.RemoveFromCart(item.product.id)) },
+                    modifier = Modifier.size(26.dp)
+                ) { Icon(Icons.Rounded.RemoveCircleOutline, null, tint = Danger, modifier = Modifier.size(14.dp)) }
+            }
+        }
+
+        // Discount input row
+        AnimatedVisibility(showDiscountField) {
+            OutlinedTextField(
+                value         = discountInput,
+                onValueChange = { v ->
+                    discountInput = v
+                    viewModel.onIntent(PosIntent.SetItemDiscount(item.product.id, v.toDoubleOrNull() ?: 0.0))
+                },
+                label         = { Text("Discount", style = MaterialTheme.typography.labelSmall) },
+                prefix        = { Text("Rs. ", style = MaterialTheme.typography.labelSmall) },
+                singleLine    = true,
+                modifier      = Modifier.fillMaxWidth().height(54.dp),
+                shape         = RoundedCornerShape(10.dp),
+                textStyle     = MaterialTheme.typography.bodySmall,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                colors        = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor   = Accent,
+                    unfocusedBorderColor = BorderColor
+                )
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cart Bottom Sheet (phone)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CartBottomSheet(state: PosState, viewModel: PosViewModel, onDismiss: () -> Unit, onCheckout: () -> Unit) {
+private fun CartBottomSheet(
+    state     : PosState,
+    viewModel : PosViewModel,
+    onDismiss : () -> Unit,
+    onCheckout: () -> Unit
+) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor   = MaterialTheme.colorScheme.surface,
+        shape            = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            Modifier.fillMaxWidth().padding(20.dp).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Review Order (${state.itemCount})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text("Order (${state.itemCount})", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                 IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, null) }
             }
-
-            LazyColumn(modifier = Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(state.cart, key = { it.product.id }) { item ->
-                    CartItemRow(item = item, viewModel = viewModel)
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(16.dp)
+            LazyColumn(
+                modifier            = Modifier.weight(1f, fill = false).heightIn(max = 400.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Total to Pay", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                    Text(CurrencyFormatter.formatRs(state.cartTotal), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Primary)
+                items(state.cart.size, key = { state.cart[it].product.id }) { i ->
+                    CartItemRow(state.cart[i], viewModel)
                 }
             }
-
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(0.3f)),
+                shape  = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Text("Total", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netTotal)}",
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Primary
+                    )
+                }
+            }
             Button(
-                onClick = onCheckout,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                onClick   = onCheckout,
+                modifier  = Modifier.fillMaxWidth().height(56.dp),
+                shape     = RoundedCornerShape(16.dp),
+                colors    = ButtonDefaults.buttonColors(containerColor = Primary)
             ) {
                 Icon(Icons.Rounded.PointOfSale, null)
                 Spacer(Modifier.width(12.dp))
@@ -437,260 +659,258 @@ private fun CartBottomSheet(state: PosState, viewModel: PosViewModel, onDismiss:
     }
 }
 
-@Composable
-private fun CartItemRow(item: CartItem, viewModel: PosViewModel) {
-    Row(
-        Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(PrimaryContainer), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Inventory2, null, tint = Primary, modifier = Modifier.size(20.dp))
-        }
+// ─────────────────────────────────────────────────────────────────────────────
+// Checkout Bottom Sheet
+// ─────────────────────────────────────────────────────────────────────────────
 
-        Column(Modifier.weight(1f)) {
-            Text(
-                item.product.name,
-                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            item.product.imei?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall, color = TextMuted
-                )
-            }
-            Text(
-                CurrencyFormatter.formatRs(item.product.sellingPrice),
-                style = MaterialTheme.typography.labelSmall, color = TextMuted
-            )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            IconButton(
-                onClick = { viewModel.onIntent(PosIntent.ChangeQty(item.product.id, -1)) },
-                modifier = Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surface)
-            ) { Icon(Icons.Rounded.Remove, null, modifier = Modifier.size(14.dp)) }
-
-            Text(
-                "${item.quantity}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.widthIn(min = 24.dp),
-                textAlign = TextAlign.Center
-            )
-
-            IconButton(
-                onClick = { viewModel.onIntent(PosIntent.ChangeQty(item.product.id, +1)) },
-                modifier = Modifier.size(28.dp).clip(CircleShape).background(Primary)
-            ) { Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(14.dp)) }
-        }
-    }
-}
-// ─── Checkout bottom sheet ────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CheckoutBottomSheet(state: PosState, viewModel: PosViewModel) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
+internal fun CheckoutBottomSheet(state: PosState, viewModel: PosViewModel) {
     ModalBottomSheet(
         onDismissRequest = { viewModel.onIntent(PosIntent.DismissCheckout) },
-        sheetState       = sheetState,
+        sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor   = MaterialTheme.colorScheme.surface,
         shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp).navigationBarsPadding(),
+        LazyColumn(
+            Modifier.fillMaxWidth().navigationBarsPadding(),
+            contentPadding      = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Handle bar
-//            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(BorderColor).align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(4.dp))
+            item { Text("Checkout", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold) }
 
-            Text("Checkout", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-
-            // Order summary card
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-            ) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Subtotal (${state.itemCount} items)", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                        Text(CurrencyFormatter.formatRs(state.cartTotal), style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Discount", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                        OutlinedTextField(
-                            value = state.discountAmount,
-                            onValueChange = { viewModel.onIntent(PosIntent.SetDiscount(it)) },
-                            modifier = Modifier.width(130.dp),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            prefix = { Text("Rs. ") },
-                            textStyle = MaterialTheme.typography.bodySmall,
-                            shape = RoundedCornerShape(8.dp),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
-                        )
-                    }
-                    HorizontalDivider(color = BorderFaint)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Total", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text(
-                            CurrencyFormatter.formatRs(state.netTotal),
-                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.ExtraBold, color = Primary
+            // ── Order Summary ──────────────────────────────────────────────────
+            item {
+                Card(
+                    shape  = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SummaryRow("Subtotal (${state.itemCount} items)", "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.subtotal)}")
+                        // Discount field
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment     = Alignment.CenterVertically
+                        ) {
+                            Text("Discount", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                            OutlinedTextField(
+                                value         = state.discountAmount,
+                                onValueChange = { viewModel.onIntent(PosIntent.SetDiscount(it)) },
+                                modifier      = Modifier.width(130.dp),
+                                singleLine    = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                prefix        = { Text("Rs. ") },
+                                textStyle     = MaterialTheme.typography.bodySmall,
+                                shape         = RoundedCornerShape(8.dp),
+                                colors        = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor   = Primary,
+                                    unfocusedBorderColor = BorderColor
+                                )
+                            )
+                        }
+                        if (state.taxRate > 0) {
+                            SummaryRow("Tax (${state.taxRate.toInt()}%)", "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.taxAmount)}")
+                        }
+                        HorizontalDivider(color = BorderFaint)
+                        SummaryRow(
+                            "Total",
+                            "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netTotal)}",
+                            bold = true
                         )
                     }
                 }
             }
 
-            // Payment method
-            Text("Payment Method", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = TextMuted)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PaymentMethod.values().forEach { method ->
-                    val isSelected = state.paymentMethod == method
+            // ── Customer selector ──────────────────────────────────────────────
+            item {
+                Text("Customer (optional)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = TextMuted)
+                Spacer(Modifier.height(6.dp))
+                CustomerDropdown(state, viewModel)
+            }
+
+            // ── Payment method ─────────────────────────────────────────────────
+            item {
+                Text("Payment Method", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = TextMuted)
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PaymentMethod.entries.forEach { method ->
+                        val sel = state.paymentMethod == method
+                        Surface(
+                            onClick  = { viewModel.onIntent(PosIntent.SelectPaymentMethod(method)) },
+                            modifier = Modifier.weight(1f),
+                            shape    = RoundedCornerShape(100.dp),
+                            color    = if (sel) Primary else MaterialTheme.colorScheme.surface,
+                            border   = if (sel) null else BorderStroke(1.5.dp, BorderColor)
+                        ) {
+                            Text(
+                                method.display,
+                                Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                style      = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign  = TextAlign.Center,
+                                color      = if (sel) Color.White else TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Cash input ─────────────────────────────────────────────────────
+            if (state.paymentMethod == PaymentMethod.CASH || state.paymentMethod == PaymentMethod.SPLIT) {
+                item {
+                    CheckoutTextField("Cash Amount", state.cashPaid, "Rs. ") {
+                        viewModel.onIntent(PosIntent.SetCashPaid(it))
+                    }
+                    if (state.paymentMethod == PaymentMethod.CASH && (state.cashPaid.toDoubleOrNull() ?: 0.0) > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Change", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                            Text(
+                                "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.cashChange)}",
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                                color = if (state.cashChange >= 0) Success else Danger
+                            )
+                        }
+                    }
+                    // Multiple cash accounts selector (if >1)
+                    if (state.cashAccounts.size > 1) {
+                        Spacer(Modifier.height(8.dp))
+                        CashAccountDropdown(state, viewModel)
+                    }
+                }
+            }
+
+            // ── Bank input ─────────────────────────────────────────────────────
+            if (state.paymentMethod == PaymentMethod.BANK || state.paymentMethod == PaymentMethod.SPLIT) {
+                item {
+                    CheckoutTextField("Bank / Transfer Amount", state.bankPaid, "Rs. ") {
+                        viewModel.onIntent(PosIntent.SetBankPaid(it))
+                    }
+                    if (state.bankAccounts.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        BankAccountDropdown(state, viewModel)
+                    }
+                }
+            }
+
+            // ── Credit — show due summary ──────────────────────────────────────
+            if (state.paymentMethod == PaymentMethod.CREDIT || state.dueAfterPayment > 0) {
+                item {
                     Surface(
-                        onClick = { viewModel.onIntent(PosIntent.SelectPaymentMethod(method)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(100.dp),
-                        color = if (isSelected) Primary else MaterialTheme.colorScheme.surface,
-                        border = if (isSelected) null else BorderStroke(1.5.dp, BorderColor)
+                        shape = RoundedCornerShape(10.dp),
+                        color = DangerContainer
                     ) {
-                        Text(
-                            method.name.lowercase().replaceFirstChar { it.uppercase() },
-                            Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center,
-                            color = if (isSelected) Color.White else TextSecondary
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Warning, null, tint = Danger, modifier = Modifier.size(16.dp))
+                                Text("Due Balance", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = Danger)
+                            }
+                            Text(
+                                "${state.currencySymbol} ${CurrencyFormatter.formatRs(state.dueAfterPayment)}",
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.ExtraBold, color = Danger
+                            )
+                        }
                     }
                 }
             }
 
-            // Cash input
-            if (state.paymentMethod == PaymentMethod.CASH || state.paymentMethod == PaymentMethod.PARTIAL) {
+            // ── Notes ──────────────────────────────────────────────────────────
+            item {
                 OutlinedTextField(
-                    value = state.cashPaid,
-                    onValueChange = { viewModel.onIntent(PosIntent.SetCashPaid(it)) },
-                    label = { Text("Cash Amount") }, prefix = { Text("Rs. ") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
-                )
-                val paid  = state.cashPaid.toLongOrNull() ?: 0L
-                val change = (paid - state.netTotal.toLong()).coerceAtLeast(0L)
-                if (state.paymentMethod == PaymentMethod.CASH && paid > 0) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Change", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                        Text(
-                            CurrencyFormatter.formatRs(change),
-                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                            color = if (change >= 0) Success else Danger
-                        )
-                    }
-                }
-            }
-
-            // Bank input
-            if (state.paymentMethod == PaymentMethod.BANK_TRANSFER || state.paymentMethod == PaymentMethod.PARTIAL) {
-                OutlinedTextField(
-                    value = state.bankPaid,
-                    onValueChange = { viewModel.onIntent(PosIntent.SetBankPaid(it)) },
-                    label = { Text("Bank/Transfer Amount") }, prefix = { Text("Rs. ") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
-                )
-                if (state.bankAccounts.isNotEmpty()) BankAccountSelector(state, viewModel)
-            }
-
-            // Customer selector for credit
-            if (state.paymentMethod == PaymentMethod.CREDIT) {
-                CustomerSelector(state, viewModel)
-            }
-
-            // Notes
-            OutlinedTextField(
-                value = state.notes,
-                onValueChange = { viewModel.onIntent(PosIntent.SetNotes(it)) },
-                label = { Text("Notes (optional)") },
-                modifier = Modifier.fillMaxWidth(), maxLines = 2, shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
-            )
-
-            // Complete sale button
-            Button(
-                onClick  = { viewModel.onIntent(PosIntent.CompleteSale) },
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape    = RoundedCornerShape(14.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = Success),
-                enabled  = !state.isProcessing,
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-            ) {
-                if (state.isProcessing) {
-                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Complete Sale  •  ${CurrencyFormatter.formatRs(state.netTotal)}",
-                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold
+                    value         = state.notes,
+                    onValueChange = { viewModel.onIntent(PosIntent.SetNotes(it)) },
+                    label         = { Text("Notes (optional)") },
+                    modifier      = Modifier.fillMaxWidth(),
+                    maxLines      = 2,
+                    shape         = RoundedCornerShape(10.dp),
+                    colors        = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor   = Primary,
+                        unfocusedBorderColor = BorderColor
                     )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BankAccountSelector(state: PosState, viewModel: PosViewModel) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = state.selectedBankAccount?.accountNumber ?: "Select bank account",
-            onValueChange = {}, readOnly = true,
-            label = { Text("Bank Account") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(), shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            state.bankAccounts.forEach { acct ->
-                DropdownMenuItem(
-                    text    = { Text("${acct.accountNumber} (${acct.bankName})") },
-                    onClick = { viewModel.onIntent(PosIntent.SelectBankAccount(acct)); expanded = false }
                 )
             }
+
+            // ── Complete Sale button ───────────────────────────────────────────
+            item {
+                Button(
+                    onClick   = { viewModel.onIntent(PosIntent.CompleteSale) },
+                    enabled   = !state.isProcessing,
+                    modifier  = Modifier.fillMaxWidth().height(56.dp),
+                    shape     = RoundedCornerShape(14.dp),
+                    colors    = ButtonDefaults.buttonColors(containerColor = Success),
+                    elevation = ButtonDefaults.buttonElevation(4.dp)
+                ) {
+                    if (state.isProcessing) {
+                        CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Rounded.CheckCircle, null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Complete Sale  ·  ${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netTotal)}",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 }
 
+@Composable
+private fun CheckoutTextField(label: String, value: String, prefix: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value           = value,
+        onValueChange   = onValueChange,
+        label           = { Text(label) },
+        prefix          = { Text(prefix) },
+        singleLine      = true,
+        modifier        = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        shape           = RoundedCornerShape(10.dp),
+        colors          = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor   = Primary,
+            unfocusedBorderColor = BorderColor
+        )
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CustomerSelector(state: PosState, viewModel: PosViewModel) {
+private fun CustomerDropdown(state: PosState, viewModel: PosViewModel) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
-            value = state.selectedCustomer?.name ?: "Select customer (required for credit)",
-            onValueChange = {}, readOnly = true,
-            label = { Text("Customer") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(), shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
+            value         = state.selectedCustomer?.let { "${it.name}${if (it.phone.isNotBlank()) " · ${it.phone}" else ""}" } ?: "Walk-in Customer",
+            onValueChange = {},
+            readOnly      = true,
+            label         = { Text("Customer") },
+            trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+            shape         = RoundedCornerShape(10.dp),
+            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("None") }, onClick = { viewModel.onIntent(PosIntent.SelectCustomer(null)); expanded = false })
+            DropdownMenuItem(
+                text    = { Text("None (Walk-in)", color = TextMuted) },
+                onClick = { viewModel.onIntent(PosIntent.SelectCustomer(null)); expanded = false }
+            )
             state.customers.forEach { c ->
                 DropdownMenuItem(
-                    text = {
+                    text    = {
                         Column {
-                            Text(c.name, style = MaterialTheme.typography.bodySmall)
-                            Text(c.phone ?: "", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                            Text(c.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (c.phone.isNotBlank()) Text(c.phone, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                if (c.outstandingBalance > 0) Text(
+                                    "Due: ${CurrencyFormatter.formatRs(c.outstandingBalance)}",
+                                    style = MaterialTheme.typography.labelSmall, color = Danger, fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     },
                     onClick = { viewModel.onIntent(PosIntent.SelectCustomer(c)); expanded = false }
@@ -700,40 +920,61 @@ private fun CustomerSelector(state: PosState, viewModel: PosViewModel) {
     }
 }
 
-// ─── Sale success dialog ──────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SaleSuccessDialog(state: PosState, onDismiss: () -> Unit) {
-    val sale = state.lastSale ?: return
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Box(
-                Modifier.size(60.dp).clip(RoundedCornerShape(18.dp)).background(SuccessContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.CheckCircle, null, tint = Success, modifier = Modifier.size(30.dp)) }
-        },
-        title = { Text("Sale Complete!", textAlign = TextAlign.Center, fontWeight = FontWeight.ExtraBold) },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Surface(shape = RoundedCornerShape(100.dp), color = PrimaryContainer) {
-                    Text(sale.invoiceNumber, Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-                        style = MaterialTheme.typography.labelMedium, color = Primary, fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    CurrencyFormatter.formatRs(sale.soldAt),
-                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = TextPrimary
+private fun CashAccountDropdown(state: PosState, viewModel: PosViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value         = state.selectedCashAccount?.name ?: "Cash",
+            onValueChange = {},
+            readOnly      = true,
+            label         = { Text("Cash Account") },
+            trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+            shape         = RoundedCornerShape(10.dp),
+            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            state.cashAccounts.forEach { acc ->
+                DropdownMenuItem(
+                    text    = { Text(acc.name) },
+                    onClick = { viewModel.onIntent(PosIntent.SelectCashAccount(acc.id)); expanded = false }
                 )
-                Text(sale.paymentMethod.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.bodySmall, color = TextMuted)
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                colors  = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape   = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("New Sale", fontWeight = FontWeight.Bold) }
         }
-    )
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BankAccountDropdown(state: PosState, viewModel: PosViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value         = state.selectedBankAccount?.let { "${it.bankName} · ${it.accountNumber}" } ?: "Select Bank",
+            onValueChange = {},
+            readOnly      = true,
+            label         = { Text("Bank Account") },
+            trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier      = Modifier.fillMaxWidth().menuAnchor(),
+            shape         = RoundedCornerShape(10.dp),
+            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Primary, unfocusedBorderColor = BorderColor)
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            state.bankAccounts.forEach { acc ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text("${acc.bankName} — ${acc.accountNumber}", fontWeight = FontWeight.SemiBold)
+                            Text(acc.accountTitle, style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                        }
+                    },
+                    onClick = { viewModel.onIntent(PosIntent.SelectBankAccount(acc)); expanded = false }
+                )
+            }
+        }
+    }
+}
+
+

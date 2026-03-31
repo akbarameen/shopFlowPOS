@@ -35,15 +35,17 @@ class InventoryViewModel(
     private val deleteProductUseCase: DeleteProductUseCase,
 ) : MviViewModel<InventoryState, InventoryIntent, InventoryEffect>(InventoryState()) {
 
-    private val searchFlow   = MutableStateFlow("")
-    private val categoryFlow = MutableStateFlow<ProductCategory?>(null)
+    private val searchFlow     = MutableStateFlow("")
+    private val categoryFlow   = MutableStateFlow<ProductCategory?>(null)
+    private val refreshTrigger = MutableStateFlow(0) // Used to re-trigger Paging flow on data change
 
     init {
-        // Wire paged flow — reacts to search/category changes with debounce
+        // Wire paged flow — reacts to search/category/trigger changes
         combine(
             searchFlow.debounce(300).distinctUntilChanged(),
-            categoryFlow
-        ) { q, cat -> q to cat }
+            categoryFlow,
+            refreshTrigger
+        ) { q, cat, _ -> q to cat }
             .flatMapLatest { (q, cat) -> getPagedProducts(q, cat).cachedIn(viewModelScope) }
             .onEach { paged -> setState { copy(pagedProducts = kotlinx.coroutines.flow.flowOf(paged)) } }
             .launchIn(viewModelScope)
@@ -131,6 +133,8 @@ class InventoryViewModel(
                     is AppResult.Success -> {
                         setState { copy(showStockDialog = null) }
                         setEffect(InventoryEffect.ShowToast("Stock updated"))
+                        refreshTrigger.value++
+                        refreshLowStockCount()
                     }
                     is AppResult.Error -> setEffect(InventoryEffect.ShowToast(r.message))
                     else -> {}
@@ -145,7 +149,11 @@ class InventoryViewModel(
                 val id = state.value.showDeleteConfirm ?: return
                 setState { copy(showDeleteConfirm = null) }
                 when (val r = deleteProductUseCase(id)) {
-                    is AppResult.Success -> setEffect(InventoryEffect.ShowToast("Product removed"))
+                    is AppResult.Success -> {
+                        setEffect(InventoryEffect.ShowToast("Product removed"))
+                        refreshTrigger.value++
+                        refreshLowStockCount()
+                    }
                     is AppResult.Error   -> setEffect(InventoryEffect.ShowToast(r.message))
                     else -> {}
                 }
@@ -227,6 +235,7 @@ class InventoryViewModel(
             is AppResult.Success -> {
                 setState { copy(isSaving = false, showProductSheet = false, editingProduct = null) }
                 setEffect(InventoryEffect.ShowToast(if (isNew) "Product added" else "Product updated"))
+                refreshTrigger.value++ // REFRESH DATA
                 refreshLowStockCount()
             }
             is AppResult.Error -> setState { copy(isSaving = false, formError = r.message) }

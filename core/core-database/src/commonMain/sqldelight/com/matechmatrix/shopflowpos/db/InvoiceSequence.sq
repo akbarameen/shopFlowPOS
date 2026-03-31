@@ -1,0 +1,28 @@
+-- FILE: invoice_sequence.sq
+-- Purpose: Generate sequential, human-readable document numbers.
+--   Seed rows on first open:
+--     ('INV',  0, now)   → Sale invoices     INV-00001
+--     ('PO',   0, now)   → Purchase orders   PO-00001
+--     ('RET',  0, now)   → Sale returns      RET-00001
+--     ('REP',  0, now)   → Repair jobs       REP-00001
+--     ('EMI',  0, now)   → Installment plans EMI-00001
+-- ════════════════════════════════════════════════════════════════════════════
+ 
+CREATE TABLE IF NOT EXISTS invoice_sequence (
+    prefix      TEXT    NOT NULL PRIMARY KEY,
+    last_number INTEGER NOT NULL DEFAULT 0,
+    updated_at  INTEGER NOT NULL
+);
+ 
+-- Call incrementSequence then getSequence inside a single transaction
+incrementSequence:
+UPDATE invoice_sequence
+SET last_number = last_number + 1, updated_at = ?
+WHERE prefix = ?;
+ 
+getSequence:
+SELECT last_number FROM invoice_sequence WHERE prefix = ?;
+ 
+initSequence:
+INSERT OR IGNORE INTO invoice_sequence (prefix, last_number, updated_at)
+VALUES (?, 0, ?);

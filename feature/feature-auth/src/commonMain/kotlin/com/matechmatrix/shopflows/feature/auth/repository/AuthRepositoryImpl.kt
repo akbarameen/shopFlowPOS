@@ -7,13 +7,15 @@ import com.matechmatrix.shopflowpos.core.network.service.LicenseApiService
 import com.matechmatrix.shopflows.feature.auth.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.time.Clock
+import kotlinx.datetime.Clock
+import kotlin.time.ExperimentalTime
 
 class AuthRepositoryImpl(
     private val db: DatabaseProvider,
     private val api: LicenseApiService
 ) : AuthRepository {
 
+    @OptIn(ExperimentalTime::class)
     override suspend fun activateLicense(
         licenseKey: String,
         shopName: String

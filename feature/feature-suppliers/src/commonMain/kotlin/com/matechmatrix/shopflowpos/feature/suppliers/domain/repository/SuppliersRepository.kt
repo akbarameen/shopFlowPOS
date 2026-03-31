@@ -7,6 +7,6 @@ interface SuppliersRepository {
     suspend fun getAllSuppliers(): AppResult<List<Supplier>>
     suspend fun insertSupplier(supplier: Supplier): AppResult<Unit>
     suspend fun updateSupplier(supplier: Supplier): AppResult<Unit>
-    suspend fun deleteSupplier(id: String): AppResult<Unit>
+    suspend fun softDeleteSupplier(id: String): AppResult<Unit>
     suspend fun getCurrencySymbol(): String
 }

@@ -138,15 +138,15 @@ fun ShopFlowTopBar(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Brush.linearGradient(listOf(colorScheme.primary, colorScheme.secondary))),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("📱", fontSize = 14.sp)
-                        }
+//                        Box(
+//                            modifier = Modifier
+//                                .size(32.dp)
+//                                .clip(RoundedCornerShape(10.dp))
+//                                .background(Brush.linearGradient(listOf(colorScheme.primary, colorScheme.secondary))),
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text("📱", fontSize = 14.sp)
+//                        }
                         Column {
                             Text(
                                 text       = pageTitle,
@@ -166,33 +166,33 @@ fun ShopFlowTopBar(
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
                         // Review button
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(colorScheme.surfaceVariant)
-                                .clickable { onReviewClick() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Star,
-                                contentDescription = "Reviews",
-                                tint = Color(0xFFFFB830),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+//                        Box(
+//                            modifier = Modifier
+//                                .size(36.dp)
+//                                .clip(RoundedCornerShape(12.dp))
+//                                .background(colorScheme.surfaceVariant)
+//                                .clickable { onReviewClick() },
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Icon(
+//                                imageVector = Icons.Rounded.Star,
+//                                contentDescription = "Reviews",
+//                                tint = Color(0xFFFFB830),
+//                                modifier = Modifier.size(18.dp)
+//                            )
+//                        }
 
                         // Dark mode toggle
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(colorScheme.surfaceVariant)
-                                .clickable { /* TODO */ },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("🌙", fontSize = 14.sp)
-                        }
+//                        Box(
+//                            modifier = Modifier
+//                                .size(36.dp)
+//                                .clip(RoundedCornerShape(12.dp))
+//                                .background(colorScheme.surfaceVariant)
+//                                .clickable { /* TODO */ },
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text("🌙", fontSize = 14.sp)
+//                        }
 
                         // Avatar
                         Box(

@@ -121,7 +121,7 @@ private fun DashRevenueCharts(state: DashboardState) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Revenue Analytics", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Analytics", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 
                 // Simple Tab Selector
                 Row(
@@ -511,7 +511,7 @@ private fun DashQuickStatsCard(state: DashboardState) {
                     Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
                 }
-                if (idx < rows.lastIndex) HorizontalDivider(color = BorderFaint, thickness = 1.dp)
+                if (idx < rows.lastIndex) Divider(color = BorderFaint, thickness = 1.dp)
             }
         }
     }

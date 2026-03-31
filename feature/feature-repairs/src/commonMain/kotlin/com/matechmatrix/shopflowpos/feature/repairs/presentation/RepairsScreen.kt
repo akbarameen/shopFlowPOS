@@ -1,15 +1,16 @@
 package com.matechmatrix.shopflowpos.feature.repairs.presentation
 
-import RepairsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -40,7 +41,7 @@ fun RepairsScreen(
     navigateChild : (String) -> Unit = {},
     viewModel     : RepairsViewModel = koinViewModel()
 ) {
-    val state            = viewModel.state.collectAsStateWithLifecycle().value
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -83,9 +84,9 @@ fun RepairsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    RepairStatChip(Modifier.weight(1f), "${state.pendingCount}",    "Pending",     Warning)
-                    RepairStatChip(Modifier.weight(1f), "${state.inProgressCount}", "In Progress", Info)
-                    RepairStatChip(Modifier.weight(1f), "${state.repairs.size}",    "Total",       Primary)
+                    RepairStatChip(Modifier.weight(1f), "${state.receivedCount}",    "Received",     Primary)
+                    RepairStatChip(Modifier.weight(1f), "${state.inRepairCount}", "In Repair", Info)
+                    RepairStatChip(Modifier.weight(1f), "${state.readyCount}",    "Ready",       Success)
 
                     if (windowSize != AppWindowSize.COMPACT) {
                         Spacer(Modifier.width(4.dp))
@@ -130,9 +131,7 @@ fun RepairsScreen(
                         selected = isSelected,
                         onClick  = { viewModel.onIntent(RepairsIntent.SetFilter(if (isSelected) null else status)) },
                         label    = {
-                            Text(status.name.lowercase().replace('_', ' ')
-                                .replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.labelSmall)
+                            Text(status.display, style = MaterialTheme.typography.labelSmall)
                         },
                         shape  = RoundedCornerShape(100.dp),
                         colors = FilterChipDefaults.filterChipColors(
@@ -171,8 +170,7 @@ fun RepairsScreen(
                 }
                 else -> when (windowSize) {
                     AppWindowSize.COMPACT  -> RepairCompactList(state, viewModel)
-                    AppWindowSize.MEDIUM   -> RepairKanban(state, viewModel)
-                    AppWindowSize.EXPANDED -> RepairDesktopTable(state, viewModel)
+                    else -> RepairDesktopTable(state, viewModel)
                 }
             }
         }
@@ -183,7 +181,7 @@ fun RepairsScreen(
     state.showCompleteDialog?.let { repair ->
         AlertDialog(
             onDismissRequest = { viewModel.onIntent(RepairsIntent.DismissCompleteDialog) },
-            title = { Text("Complete Repair", fontWeight = FontWeight.Bold) },
+            title = { Text("Update Charge", fontWeight = FontWeight.Bold) },
             text  = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -222,7 +220,7 @@ fun RepairsScreen(
             confirmButton = {
                 Button(onClick = { viewModel.onIntent(RepairsIntent.CompleteRepair) },
                     colors = ButtonDefaults.buttonColors(containerColor = Success),
-                    shape  = RoundedCornerShape(10.dp)) { Text("Confirm & Mark Paid") }
+                    shape  = RoundedCornerShape(10.dp)) { Text("Update & Mark Ready") }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.onIntent(RepairsIntent.DismissCompleteDialog) }) { Text("Cancel") }
@@ -244,59 +242,6 @@ private fun RepairCompactList(state: RepairsState, viewModel: RepairsViewModel) 
     }
 }
 
-// ── MEDIUM — Kanban board (horizontal status columns) ────────────────────────
-@Composable
-private fun RepairKanban(state: RepairsState, viewModel: RepairsViewModel) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding        = PaddingValues(bottom = 24.dp),
-        modifier              = Modifier.fillMaxSize()
-    ) {
-        val statusGroups = listOf(
-            RepairStatus.PENDING     to "Pending",
-            RepairStatus.IN_PROGRESS to "In Progress",
-            RepairStatus.COMPLETED   to "Completed",
-            RepairStatus.CANCELLED   to "Cancelled"
-        )
-        items(statusGroups) { (status, label) ->
-            val repairs = state.repairs.filter { it.status == status }
-            val color   = repairStatusColor(status)
-            Column(
-                Modifier.width(280.dp).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Column header
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(color.copy(alpha = 0.12f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
-                        Text(label, style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold, color = color)
-                    }
-                    Surface(shape = CircleShape, color = color.copy(alpha = 0.2f)) {
-                        Text("${repairs.size}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
-                            color = color)
-                    }
-                }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)) {
-                    items(repairs, key = { it.id }) { repair ->
-                        RepairCard(repair, "", viewModel)
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ── EXPANDED — desktop data table ────────────────────────────────────────────
 @Composable
 private fun RepairDesktopTable(state: RepairsState, viewModel: RepairsViewModel) {
@@ -313,12 +258,12 @@ private fun RepairDesktopTable(state: RepairsState, viewModel: RepairsViewModel)
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                RepTHeader("Customer / Device", 0.28f)
-                RepTHeader("Issue",             0.22f)
-                RepTHeader("Estimated",         0.14f, TextAlign.End)
-                RepTHeader("Status",            0.16f, TextAlign.Center)
-                RepTHeader("Date",              0.12f)
-                RepTHeader("Actions",           0.08f, TextAlign.Center)
+                RepTHeader("Job # / Customer", 0.20f)
+                RepTHeader("Device / Model",    0.20f)
+                RepTHeader("Problem",          0.20f)
+                RepTHeader("Final Cost",       0.12f, TextAlign.End)
+                RepTHeader("Status",           0.14f, TextAlign.Center)
+                RepTHeader("Date",             0.14f)
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -365,61 +310,35 @@ private fun RepairTableRow(repair: RepairJob, isEven: Boolean, viewModel: Repair
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            Modifier.weight(0.28f),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(statusColor.copy(0.12f)),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.Build, null, tint = statusColor, modifier = Modifier.size(16.dp)) }
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(repair.customerName, style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(repair.deviceModel, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
+        Column(Modifier.weight(0.20f)) {
+            Text(repair.jobNumber, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Primary)
+            Text(repair.customerName, style = MaterialTheme.typography.bodySmall)
         }
-        Text(repair.problem, modifier = Modifier.weight(0.22f),
+        Column(Modifier.weight(0.20f)) {
+            Text(repair.deviceBrand, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(repair.deviceModel, style = MaterialTheme.typography.bodySmall)
+        }
+        Text(repair.problemDescription, modifier = Modifier.weight(0.20f),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(CurrencyFormatter.formatRs(repair.estimatedCost),
-            modifier = Modifier.weight(0.14f),
+        Text(CurrencyFormatter.formatRs(repair.finalCost.takeIf { it > 0 } ?: repair.estimatedCost),
+            modifier = Modifier.weight(0.12f),
             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End)
-        Box(Modifier.weight(0.16f), contentAlignment = Alignment.Center) {
+        Box(Modifier.weight(0.14f), contentAlignment = Alignment.Center) {
             Surface(shape = RoundedCornerShape(100.dp), color = statusColor.copy(alpha = 0.12f)) {
                 Text(
-                    repair.status.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
+                    repair.status.display,
                     Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
                     color = statusColor
                 )
             }
         }
-        Text(DateTimeUtils.formatDate(repair.createdAt), modifier = Modifier.weight(0.12f),
+        Text(DateTimeUtils.formatDate(repair.createdAt), modifier = Modifier.weight(0.14f),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // Actions
-        Box(Modifier.weight(0.08f), contentAlignment = Alignment.Center) {
-            when {
-                repair.status == RepairStatus.PENDING -> {
-                    IconButton(
-                        onClick  = { viewModel.onIntent(RepairsIntent.UpdateStatus(repair.id, RepairStatus.IN_PROGRESS)) },
-                        modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.PlayArrow, "Start", tint = Info, modifier = Modifier.size(16.dp)) }
-                }
-                repair.status == RepairStatus.IN_PROGRESS -> {
-                    IconButton(
-                        onClick  = { viewModel.onIntent(RepairsIntent.ShowCompleteDialog(repair)) },
-                        modifier = Modifier.size(32.dp)
-                    ) { Icon(Icons.Rounded.CheckCircle, "Complete", tint = Success, modifier = Modifier.size(16.dp)) }
-                }
-            }
-        }
     }
 }
 
@@ -441,7 +360,7 @@ private fun RepairStatChip(modifier: Modifier, value: String, label: String, col
     }
 }
 
-// ── Repair card (Compact & Kanban) ────────────────────────────────────────────
+// ── Repair card (Compact) ─────────────────────────────────────────────────────
 @Composable
 private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: RepairsViewModel) {
     val statusColor = repairStatusColor(repair.status)
@@ -471,13 +390,13 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
                         Text(repair.customerName, style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(repair.deviceModel, style = MaterialTheme.typography.labelSmall,
+                        Text("${repair.deviceBrand} ${repair.deviceModel}", style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Surface(shape = RoundedCornerShape(8.dp), color = statusColor.copy(alpha = 0.12f)) {
                     Text(
-                        repair.status.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
+                        repair.status.display,
                         Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = statusColor, fontWeight = FontWeight.Bold
@@ -485,7 +404,7 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
                 }
             }
 
-            Text(repair.problem, style = MaterialTheme.typography.bodySmall,
+            Text(repair.problemDescription, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
 
@@ -494,8 +413,8 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
                     Text("Est: ${CurrencyFormatter.formatRs(repair.estimatedCost)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (repair.status == RepairStatus.COMPLETED) {
-                        Text("Paid: ${CurrencyFormatter.formatRs(repair.finalCost ?: 0.0)}",
+                    if (repair.finalCost > 0) {
+                        Text("Bill: ${CurrencyFormatter.formatRs(repair.finalCost)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Success, fontWeight = FontWeight.Bold)
                     }
@@ -505,16 +424,22 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
-            if (repair.status != RepairStatus.COMPLETED && repair.status != RepairStatus.CANCELLED) {
+            if (repair.status != RepairStatus.DELIVERED && repair.status != RepairStatus.CANCELLED) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (repair.status == RepairStatus.PENDING) {
+                    val nextStatus = when(repair.status) {
+                        RepairStatus.RECEIVED -> RepairStatus.DIAGNOSING
+                        RepairStatus.DIAGNOSING -> RepairStatus.IN_REPAIR
+                        RepairStatus.IN_REPAIR -> RepairStatus.READY
+                        else -> null
+                    }
+                    
+                    if (nextStatus != null && nextStatus != RepairStatus.READY) {
                         OutlinedButton(
-                            onClick = { viewModel.onIntent(RepairsIntent.UpdateStatus(repair.id, RepairStatus.IN_PROGRESS)) },
+                            onClick = { viewModel.onIntent(RepairsIntent.UpdateStatus(repair.id, nextStatus)) },
                             modifier = Modifier.weight(1f),
                             shape    = RoundedCornerShape(10.dp)
-                        ) { Text("Start Work", style = MaterialTheme.typography.labelSmall) }
-                    }
-                    if (repair.status == RepairStatus.IN_PROGRESS) {
+                        ) { Text("To ${nextStatus.display}", style = MaterialTheme.typography.labelSmall) }
+                    } else if (nextStatus == RepairStatus.READY) {
                         Button(
                             onClick  = { viewModel.onIntent(RepairsIntent.ShowCompleteDialog(repair)) },
                             modifier = Modifier.weight(1f),
@@ -522,12 +447,13 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
                             shape    = RoundedCornerShape(10.dp)
                         ) { Text("Finish & Bill", style = MaterialTheme.typography.labelSmall) }
                     }
+                    
                     OutlinedButton(
                         onClick  = { viewModel.onIntent(RepairsIntent.UpdateStatus(repair.id, RepairStatus.CANCELLED)) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(0.5f),
                         shape    = RoundedCornerShape(10.dp),
                         border   = androidx.compose.foundation.BorderStroke(1.dp, Danger)
-                    ) { Text("Cancel", style = MaterialTheme.typography.labelSmall, color = Danger) }
+                    ) { Icon(Icons.Rounded.Close, null, tint = Danger, modifier = Modifier.size(16.dp)) }
                 }
             }
         }
@@ -536,11 +462,13 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 private fun repairStatusColor(status: RepairStatus): Color = when (status) {
-    RepairStatus.PENDING     -> Warning
-    RepairStatus.IN_PROGRESS -> Info
-    RepairStatus.COMPLETED   -> Success
+    RepairStatus.RECEIVED     -> Primary
+    RepairStatus.DIAGNOSING   -> Warning
+    RepairStatus.WAITING_PARTS -> Warning
+    RepairStatus.IN_REPAIR    -> Info
+    RepairStatus.READY       -> Success
+    RepairStatus.DELIVERED   -> Success
     RepairStatus.CANCELLED   -> Danger
-    RepairStatus.DELIVERED   -> Primary
 }
 
 // ── Form dialog ───────────────────────────────────────────────────────────────
@@ -552,33 +480,27 @@ private fun RepairFormDialog(state: RepairsState, viewModel: RepairsViewModel) {
         title = { Text("New Repair Job", fontWeight = FontWeight.Bold) },
         text  = {
             Column(
-                modifier            = Modifier.heightIn(max = 480.dp),
+                modifier            = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                RepField("Customer Name *", state.formCustomerName) { viewModel.onIntent(RepairsIntent.FormCustomerName(it)) }
+                RepField("Phone", state.formCustomerPhone, KeyboardType.Phone) { viewModel.onIntent(RepairsIntent.FormCustomerPhone(it)) }
+                
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RepField("Customer Name *", state.formCustomerName, Modifier.weight(1f))
-                    { viewModel.onIntent(RepairsIntent.FormCustomerName(it)) }
-                    RepField("Phone", state.formCustomerPhone, Modifier.weight(1f))
-                    { viewModel.onIntent(RepairsIntent.FormCustomerPhone(it)) }
+                    RepField("Brand", state.formDeviceBrand, modifier = Modifier.weight(1f)) { viewModel.onIntent(RepairsIntent.FormDeviceBrand(it)) }
+                    RepField("Model *", state.formDeviceModel, modifier = Modifier.weight(1f)) { viewModel.onIntent(RepairsIntent.FormDeviceModel(it)) }
                 }
+                
+                RepField("Problem Description *", state.formProblemDescription) { viewModel.onIntent(RepairsIntent.FormProblemDescription(it)) }
+                
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RepField("Device Type *", state.formDeviceType, Modifier.weight(1f))
-                    { viewModel.onIntent(RepairsIntent.FormDeviceType(it)) }
-                    RepField("Model", state.formDeviceModel, Modifier.weight(1f))
-                    { viewModel.onIntent(RepairsIntent.FormDeviceModel(it)) }
+                    RepField("Est. Cost", state.formEstimatedCost, KeyboardType.Number, Modifier.weight(1f)) { viewModel.onIntent(RepairsIntent.FormEstimatedCost(it)) }
+                    RepField("Advance", state.formAdvancePaid, KeyboardType.Number, Modifier.weight(1f)) { viewModel.onIntent(RepairsIntent.FormAdvancePaid(it)) }
                 }
-                RepField("Issue Description *", state.formIssue, Modifier.fillMaxWidth())
-                { viewModel.onIntent(RepairsIntent.FormIssue(it)) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RepField("Estimated Cost", state.formEstimatedCost, Modifier.weight(1f),
-                        KeyboardType.Number)
-                    { viewModel.onIntent(RepairsIntent.FormEstimatedCost(it)) }
-                    RepField("Advance Paid", state.formAdvance, Modifier.weight(1f),
-                        KeyboardType.Number)
-                    { viewModel.onIntent(RepairsIntent.FormAdvance(it)) }
-                }
-                RepField("Notes", state.formNotes, Modifier.fillMaxWidth())
-                { viewModel.onIntent(RepairsIntent.FormNotes(it)) }
+                
+                RepField("IMEI / Serial", state.formImei) { viewModel.onIntent(RepairsIntent.FormImei(it)) }
+                RepField("Notes", state.formNotes) { viewModel.onIntent(RepairsIntent.FormNotes(it)) }
+                
                 state.formError?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = Danger)
                 }
@@ -597,8 +519,9 @@ private fun RepairFormDialog(state: RepairsState, viewModel: RepairsViewModel) {
 
 @Composable
 private fun RepField(
-    label: String, value: String, modifier: Modifier,
+    label: String, value: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(

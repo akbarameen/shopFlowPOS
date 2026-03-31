@@ -1,16 +1,16 @@
 package com.matechmatrix.shopflowpos.feature.salesreturn.presentation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.AssignmentReturn
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,8 +27,14 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.matechmatrix.shopflowpos.core.common.util.CurrencyFormatter
 import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
+import com.matechmatrix.shopflowpos.core.model.BankAccount
+import com.matechmatrix.shopflowpos.core.model.CashAccount
 import com.matechmatrix.shopflowpos.core.model.SaleReturn
+import com.matechmatrix.shopflowpos.core.model.enums.AccountType
+import com.matechmatrix.shopflowpos.core.model.enums.RefundMethod
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
+import com.matechmatrix.shopflowpos.core.ui.components.EmptyStateView
+import com.matechmatrix.shopflowpos.core.ui.components.LoadingView
 import com.matechmatrix.shopflowpos.core.ui.theme.*
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -38,23 +44,19 @@ fun SalesReturnScreen(
     navigateChild : (String) -> Unit = {},
     viewModel     : SalesReturnViewModel = koinViewModel()
 ) {
-    val state            = viewModel.state.collectAsStateWithLifecycle().value
-    val snackbarHostState = remember { SnackbarHostState() }
+    val state         by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.effect.collect { e ->
-            if (e is SalesReturnEffect.Toast) snackbarHostState.showSnackbar(e.msg)
+            if (e is SalesReturnEffect.ShowToast) snackbarState.showSnackbar(e.message)
         }
     }
 
-    val hPad = when (windowSize) {
-        AppWindowSize.EXPANDED -> 28.dp
-        AppWindowSize.MEDIUM   -> 20.dp
-        AppWindowSize.COMPACT  -> 16.dp
-    }
+    val hPad = when (windowSize) { AppWindowSize.EXPANDED -> 28.dp; AppWindowSize.MEDIUM -> 20.dp; else -> 16.dp }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost   = { SnackbarHost(snackbarState) },
         floatingActionButton = {
             if (windowSize == AppWindowSize.COMPACT) {
                 FloatingActionButton(
@@ -62,365 +64,374 @@ fun SalesReturnScreen(
                     containerColor = Warning,
                     contentColor   = Color.White,
                     shape          = androidx.compose.foundation.shape.CircleShape
-                ) { Icon(Icons.Rounded.Add, "New Return") }
+                ) { Icon(Icons.AutoMirrored.Rounded.AssignmentReturn, "New Return") }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+    ) {
         Column(
-            Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = hPad, vertical = 16.dp),
+            modifier            = Modifier.fillMaxSize().padding(horizontal = hPad, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── Top bar with Add button on Medium/Expanded ───────────────────
-            if (windowSize != AppWindowSize.COMPACT) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            // ── Header ─────────────────────────────────────────────────────────
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+//                Column {
+//                    Text("Sales Returns", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+//                    Text("This month", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+//                }
+                if (windowSize != AppWindowSize.COMPACT) {
                     Button(
                         onClick = { viewModel.onIntent(SalesReturnIntent.ShowAddDialog) },
                         colors  = ButtonDefaults.buttonColors(containerColor = Warning),
-                        shape   = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+                        shape   = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Rounded.Add, null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.AutoMirrored.Rounded.AssignmentReturn, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Record Return", style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold)
+                        Text("Record Return", fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // ── Summary ──────────────────────────────────────────────────────
+            // ── Summary ────────────────────────────────────────────────────────
             if (!state.isLoading) {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape     = RoundedCornerShape(16.dp),
-                    colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(0.dp)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(20.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("${state.returns.size}",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold, color = Warning)
-                            Text("Returns", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        VerticalDivider(Modifier.height(36.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(CurrencyFormatter.formatCompact(state.totalReturns),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold, color = Danger)
-                            Text("Refunded", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SummaryBox(Modifier.weight(1f), "Returns", "${state.returns.size}", Warning, "📦")
+                    SummaryBox(Modifier.weight(1f), "Total Refunded", "${state.currencySymbol} ${CurrencyFormatter.formatCompact(state.totalReturns)}", Danger, "💸")
                 }
             }
 
-            // ── Content ──────────────────────────────────────────────────────
+            // ── Content ────────────────────────────────────────────────────────
             when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Warning)
-                }
-                state.returns.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(
-                            Modifier.size(72.dp).clip(RoundedCornerShape(20.dp)).background(WarningContainer),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Rounded.AssignmentReturn, null, tint = Warning,
-                            modifier = Modifier.size(32.dp)) }
-                        Text("No returns this month",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface)
-                        Text("Tap + to record a sales return",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                state.isLoading -> LoadingView()
+                state.returns.isEmpty() -> EmptyStateView(
+                    icon     = Icons.AutoMirrored.Rounded.AssignmentReturn,
+                    title    = "No returns this month",
+                    subtitle = "Tap + to record a sales return"
+                )
                 else -> when (windowSize) {
-                    AppWindowSize.COMPACT  -> ReturnCompactList(state)
-                    AppWindowSize.MEDIUM   -> ReturnMediumGrid(state)
+                    AppWindowSize.COMPACT  -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+                        items(state.returns.size, key = { state.returns[it].id }) { i ->
+                            ReturnCard(state.returns[i], state.currencySymbol)
+                        }
+                    }
+                    AppWindowSize.MEDIUM   -> LazyVerticalGrid(GridCells.Fixed(2), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        items(state.returns.size, key = { state.returns[it].id }) { i ->
+                            ReturnCard(state.returns[i], state.currencySymbol)
+                        }
+                    }
                     AppWindowSize.EXPANDED -> ReturnDesktopTable(state)
                 }
             }
         }
     }
 
-    if (state.showAddDialog) ReturnAddDialog(state, viewModel)
+    if (state.showAddDialog) ReturnAddDialog(state = state, viewModel = viewModel)
 }
 
-// ── COMPACT ───────────────────────────────────────────────────────────────────
 @Composable
-private fun ReturnCompactList(state: SalesReturnState) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding      = PaddingValues(bottom = 88.dp)
-    ) {
-        items(state.returns, key = { it.id }) { r -> ReturnCard(r, state.currencySymbol) }
+private fun SummaryBox(modifier: Modifier, label: String, value: String, color: Color, emoji: String) {
+    Card(modifier = modifier, shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = color.copy(0.08f)), elevation = CardDefaults.cardElevation(0.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(emoji, fontSize = 18.sp)
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, color = color)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = color.copy(0.7f), fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
-// ── MEDIUM ────────────────────────────────────────────────────────────────────
 @Composable
-private fun ReturnMediumGrid(state: SalesReturnState) {
-    LazyVerticalGrid(
-        columns               = GridCells.Fixed(2),
-        verticalArrangement   = Arrangement.spacedBy(10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding        = PaddingValues(bottom = 24.dp)
-    ) {
-        items(state.returns, key = { it.id }) { r -> ReturnCard(r, state.currencySymbol) }
+private fun ReturnCard(r: SaleReturn, currency: String) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(0.dp)) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(WarningContainer), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Rounded.AssignmentReturn, null, tint = Warning, modifier = Modifier.size(20.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(r.returnNumber, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(r.customerName, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                Text(r.returnReason, style = MaterialTheme.typography.labelSmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(DateTimeUtils.formatDate(r.returnedAt), style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (r.deductionAmount > 0) {
+                    Text("-$currency ${CurrencyFormatter.formatRs(r.grossRefundAmount)}", style = MaterialTheme.typography.labelSmall, color = TextMuted, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough)
+                }
+                Text("-$currency ${CurrencyFormatter.formatRs(r.netRefundAmount)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.ExtraBold, color = Danger)
+                Surface(shape = RoundedCornerShape(100.dp), color = WarningContainer) {
+                    Text(r.refundMethod.display, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Warning)
+                }
+            }
+        }
     }
 }
 
-// ── EXPANDED — desktop table ──────────────────────────────────────────────────
 @Composable
 private fun ReturnDesktopTable(state: SalesReturnState) {
-    Card(
-        Modifier.fillMaxSize(),
-        shape     = RoundedCornerShape(16.dp),
-        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
-    ) {
+    Card(Modifier.fillMaxSize(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(0.dp)) {
         Column {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RetTHeader("Product",       0.30f)
-                RetTHeader("Reason",        0.25f)
-                RetTHeader("Date",          0.20f)
-                RetTHeader("Refund Amount", 0.25f, TextAlign.End)
+            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 20.dp, vertical = 12.dp)) {
+                listOf("Return #" to 0.15f, "Customer" to 0.20f, "Reason" to 0.25f, "Date" to 0.15f, "Gross" to 0.12f, "Net Refund" to 0.13f).forEach { (label, weight) ->
+                    Text(label.uppercase(), Modifier.weight(weight), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextMuted, letterSpacing = 0.6.sp)
+                }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
+            HorizontalDivider(color = BorderFaint)
             LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                 itemsIndexed(state.returns, key = { _, r -> r.id }) { idx, r ->
-                    ReturnTableRow(r, state.currencySymbol, idx % 2 == 0)
-                    HorizontalDivider(
-                        color     = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                        thickness = 0.5.dp,
-                        modifier  = Modifier.padding(horizontal = 20.dp)
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().background(if (idx % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(0.35f)).padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(r.returnNumber, Modifier.weight(0.15f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Warning)
+                        Text(r.customerName, Modifier.weight(0.20f), style = MaterialTheme.typography.bodySmall, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.returnReason, Modifier.weight(0.25f), style = MaterialTheme.typography.bodySmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(DateTimeUtils.formatDate(r.returnedAt), Modifier.weight(0.15f), style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("${state.currencySymbol} ${CurrencyFormatter.formatCompact(r.grossRefundAmount)}", Modifier.weight(0.12f), style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                        Text("-${state.currencySymbol} ${CurrencyFormatter.formatCompact(r.netRefundAmount)}", Modifier.weight(0.13f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Danger)
+                    }
+                    HorizontalDivider(color = BorderFaint.copy(0.4f), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 20.dp))
                 }
             }
         }
     }
 }
 
-@Composable
-private fun RowScope.RetTHeader(
-    label: String, weight: Float,
-    align: TextAlign = TextAlign.Start
-) {
-    Text(
-        label.uppercase(),
-        modifier      = Modifier.weight(weight),
-        style         = MaterialTheme.typography.labelSmall,
-        fontWeight    = FontWeight.Bold,
-        color         = MaterialTheme.colorScheme.onSurfaceVariant,
-        letterSpacing = 0.6.sp,
-        textAlign     = align
-    )
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Add Return Dialog
+// ─────────────────────────────────────────────────────────────────────────────
 
-@Composable
-private fun ReturnTableRow(r: SaleReturn, currencySymbol: String, isEven: Boolean) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(
-                if (isEven) MaterialTheme.colorScheme.surface
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-            )
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            Modifier.weight(0.30f),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(WarningContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.AssignmentReturn, null, tint = Warning, modifier = Modifier.size(16.dp)) }
-            Text(r.productName, style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(r.returnReason, modifier = Modifier.weight(0.25f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(DateTimeUtils.formatDate(r.returnedAt), modifier = Modifier.weight(0.20f),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Column(Modifier.weight(0.25f), horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("-${CurrencyFormatter.formatRs(r.refundAmount)}",
-                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Danger)
-            Surface(shape = RoundedCornerShape(100.dp), color = WarningContainer) {
-                Text("RETURNED", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Warning)
-            }
-        }
-    }
-}
-
-// ── Card ──────────────────────────────────────────────────────────────────────
-@Composable
-private fun ReturnCard(r: SaleReturn, currencySymbol: String) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape     = RoundedCornerShape(14.dp),
-        colors    = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(WarningContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.AssignmentReturn, null, tint = Warning, modifier = Modifier.size(20.dp)) }
-
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(r.productName, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(r.returnReason, style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(DateTimeUtils.formatDate(r.returnedAt), style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("-${CurrencyFormatter.formatRs(r.refundAmount)}",
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Danger)
-                Surface(shape = RoundedCornerShape(100.dp), color = WarningContainer) {
-                    Text("RETURNED", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Warning)
-                }
-            }
-        }
-    }
-}
-
-// ── Add Return Dialog ─────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReturnAddDialog(state: SalesReturnState, viewModel: SalesReturnViewModel) {
-    AlertDialog(
+    var showAccountDropdown by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
         onDismissRequest = { viewModel.onIntent(SalesReturnIntent.DismissDialog) },
-        title = { Text("Record Sales Return", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
+        sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor   = MaterialTheme.colorScheme.surface,
+        shape            = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    ) {
+        LazyColumn(
+            Modifier.fillMaxWidth().navigationBarsPadding(),
+            contentPadding      = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item { Text("Record Sales Return", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold) }
+
+            // ── Invoice lookup ──────────────────────────────────────────────────
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value         = state.searchInvoice,
                         onValueChange = { viewModel.onIntent(SalesReturnIntent.SearchInvoice(it)) },
-                        label         = { Text("Invoice Number") },
+                        label         = { Text("Invoice Number (e.g. INV-00001)") },
                         singleLine    = true,
                         modifier      = Modifier.weight(1f),
                         shape         = RoundedCornerShape(10.dp),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = Warning,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                        )
+                        colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Warning, unfocusedBorderColor = BorderColor)
                     )
                     FilledIconButton(
                         onClick  = { viewModel.onIntent(SalesReturnIntent.LookupSale) },
-                        modifier = Modifier.size(48.dp),
-                        colors   = IconButtonDefaults.filledIconButtonColors(containerColor = PrimaryContainer)
-                    ) { Icon(Icons.Rounded.Search, null, tint = Primary) }
+                        modifier = Modifier.size(52.dp),
+                        colors   = IconButtonDefaults.filledIconButtonColors(containerColor = Warning)
+                    ) {
+                        if (state.isSearching) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                        else Icon(Icons.Rounded.Search, null, tint = Color.White)
+                    }
                 }
-
                 state.saleSearchError?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = Danger)
                 }
+            }
 
-                state.foundSale?.let { sale ->
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SuccessContainer
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("Found: ${sale.invoiceNumber}",
-                                    style = MaterialTheme.typography.bodySmall, color = Success,
-                                    fontWeight = FontWeight.Bold)
-                                Text("Amount: ${CurrencyFormatter.formatRs(sale.totalAmount)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Success.copy(alpha = 0.7f))
+            // ── Found sale info ─────────────────────────────────────────────────
+            state.foundSale?.let { sale ->
+                item {
+                    Surface(shape = RoundedCornerShape(10.dp), color = SuccessContainer) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("✅ ${sale.invoiceNumber}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Success)
+                                Text(DateTimeUtils.formatDate(sale.soldAt), style = MaterialTheme.typography.labelSmall, color = Success.copy(0.7f))
                             }
-                            Icon(Icons.Rounded.CheckCircle, null, tint = Success, modifier = Modifier.size(20.dp))
+                            Text("${sale.customerName}${if (sale.customerPhone.isNotBlank()) " · ${sale.customerPhone}" else ""}", style = MaterialTheme.typography.labelSmall, color = Success.copy(0.7f))
+                            Text("Total: ${state.currencySymbol} ${CurrencyFormatter.formatRs(sale.totalAmount)}  |  Status: ${sale.status.display}", style = MaterialTheme.typography.labelSmall, color = Success.copy(0.7f))
+                        }
+                    }
+                }
+
+                // ── Item selection table ──────────────────────────────────────────
+                item { Text("Select Items to Return", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = TextMuted) }
+
+                state.foundItems.forEachIndexed { _, itemState ->
+                    item(key = itemState.saleItem.id) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(0.4f)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(itemState.saleItem.productName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                        if (!itemState.saleItem.imei.isNullOrBlank()) Text(itemState.saleItem.imei!!, style = MaterialTheme.typography.labelSmall, color = Primary)
+                                        Text("Sold: ${itemState.saleItem.quantity} × ${state.currencySymbol} ${CurrencyFormatter.formatRs(itemState.saleItem.unitPrice)}", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    }
+                                    // Qty stepper
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        IconButton(
+                                            onClick  = { viewModel.onIntent(SalesReturnIntent.SetItemQty(itemState.saleItem.id, itemState.returnedQty - 1)) },
+                                            modifier = Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.surface)
+                                        ) { Icon(Icons.Rounded.Remove, null, modifier = Modifier.size(12.dp)) }
+                                        Text("${itemState.returnedQty}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 24.dp), textAlign = TextAlign.Center)
+                                        IconButton(
+                                            onClick  = { viewModel.onIntent(SalesReturnIntent.SetItemQty(itemState.saleItem.id, itemState.returnedQty + 1)) },
+                                            modifier = Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (itemState.returnedQty < itemState.saleItem.quantity) Warning else BorderColor)
+                                        ) { Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(12.dp)) }
+                                    }
+                                }
+                                // Restock toggle
+                                AnimatedVisibility(itemState.returnedQty > 0) {
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Add back to inventory", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                        Switch(
+                                            checked         = itemState.restockItem,
+                                            onCheckedChange = { viewModel.onIntent(SalesReturnIntent.SetItemRestock(itemState.saleItem.id, it)) },
+                                            modifier        = Modifier.height(24.dp),
+                                            colors          = SwitchDefaults.colors(checkedThumbColor = Success, checkedTrackColor = SuccessContainer)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Deduction & Refund ──────────────────────────────────────────
+                if (state.hasSelectedItems) {
+                    item {
+                        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Gross Refund", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.grossRefund)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Deduction %", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                    OutlinedTextField(
+                                        value         = state.formDeductionPct,
+                                        onValueChange = { viewModel.onIntent(SalesReturnIntent.FormDeductionPct(it)) },
+                                        modifier      = Modifier.width(110.dp),
+                                        singleLine    = true,
+                                        suffix        = { Text("%") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        textStyle     = MaterialTheme.typography.bodySmall,
+                                        shape         = RoundedCornerShape(8.dp),
+                                        colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Warning, unfocusedBorderColor = BorderColor)
+                                    )
+                                }
+                                HorizontalDivider(color = BorderFaint, thickness = 0.5.dp)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Net Refund", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netRefund)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.ExtraBold, color = if (state.netRefund > 0) Success else TextMuted)
+                                }
+                            }
                         }
                     }
 
-                    OutlinedTextField(
-                        value         = state.formReason,
-                        onValueChange = { viewModel.onIntent(SalesReturnIntent.FormReason(it)) },
-                        label         = { Text("Reason for return *") },
-                        singleLine    = true,
-                        modifier      = Modifier.fillMaxWidth(),
-                        shape         = RoundedCornerShape(10.dp),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = Warning,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    // Reason + notes
+                    item {
+                        OutlinedTextField(
+                            value         = state.formReason,
+                            onValueChange = { viewModel.onIntent(SalesReturnIntent.FormReason(it)) },
+                            label         = { Text("Return Reason *") },
+                            singleLine    = true,
+                            modifier      = Modifier.fillMaxWidth(),
+                            shape         = RoundedCornerShape(10.dp),
+                            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Warning, unfocusedBorderColor = BorderColor)
                         )
-                    )
-                    OutlinedTextField(
-                        value         = state.formRefundAmount,
-                        onValueChange = { viewModel.onIntent(SalesReturnIntent.FormRefund(it)) },
-                        label         = { Text("Refund Amount") },
-                        prefix        = { Text("Rs. ") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine    = true,
-                        modifier      = Modifier.fillMaxWidth(),
-                        shape         = RoundedCornerShape(10.dp),
-                        colors        = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor   = Warning,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    }
+                    item {
+                        OutlinedTextField(
+                            value         = state.formNotes,
+                            onValueChange = { viewModel.onIntent(SalesReturnIntent.FormNotes(it)) },
+                            label         = { Text("Notes (optional)") },
+                            modifier      = Modifier.fillMaxWidth(),
+                            maxLines      = 2,
+                            shape         = RoundedCornerShape(10.dp),
+                            colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Warning, unfocusedBorderColor = BorderColor)
                         )
-                    )
+                    }
+
+                    // Refund method
+                    item {
+                        Text("Refund Method", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = TextMuted)
+                        Spacer(Modifier.height(6.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RefundMethod.entries.forEach { method ->
+                                val sel = state.formRefundMethod == method
+                                FilterChip(
+                                    selected = sel,
+                                    onClick  = { viewModel.onIntent(SalesReturnIntent.FormRefundMethod(method)) },
+                                    label    = { Text(method.display, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.weight(1f),
+                                    colors   = FilterChipDefaults.filterChipColors(selectedContainerColor = Warning, selectedLabelColor = Color.White)
+                                )
+                            }
+                        }
+                    }
+
+                    // Account selector
+                    if (state.formRefundMethod != RefundMethod.STORE_CREDIT) {
+                        item {
+                            val accounts = if (state.formAccountType == AccountType.CASH) state.cashAccounts else state.bankAccounts
+                            if (accounts.isNotEmpty()) {
+                                ExposedDropdownMenuBox(expanded = showAccountDropdown, onExpandedChange = { showAccountDropdown = it }) {
+                                    OutlinedTextField(
+                                        value         = accounts.find { 
+                                            when(it) {
+                                                is CashAccount -> it.id == state.formAccountId
+                                                is BankAccount -> it.id == state.formAccountId
+                                                else -> false
+                                            }
+                                        }?.let { if (it is CashAccount) it.name else (it as BankAccount).bankName } ?: "Select Account",
+                                        onValueChange = {}, readOnly = true,
+                                        label         = { Text("Refund From") },
+                                        trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(showAccountDropdown) },
+                                        modifier      = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                                        shape         = RoundedCornerShape(10.dp),
+                                        colors        = OutlinedTextFieldDefaults.colors(focusedBorderColor = Warning, unfocusedBorderColor = BorderColor)
+                                    )
+                                    ExposedDropdownMenu(expanded = showAccountDropdown, onDismissRequest = { showAccountDropdown = false }) {
+                                        accounts.forEach { acc ->
+                                            val (id, label) = if (acc is CashAccount) acc.id to acc.name else (acc as BankAccount).run { id to "$bankName · $accountNumber" }
+                                            DropdownMenuItem(text = { Text(label) }, onClick = { viewModel.onIntent(SalesReturnIntent.FormAccountId(id)); showAccountDropdown = false })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+
                 state.formError?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall, color = Danger)
+                    item { Text(it, style = MaterialTheme.typography.labelSmall, color = Danger) }
+                }
+
+                // Submit
+                item {
+                    Button(
+                        onClick   = { viewModel.onIntent(SalesReturnIntent.SaveReturn) },
+                        enabled   = !state.isProcessing && state.hasSelectedItems,
+                        modifier  = Modifier.fillMaxWidth().height(54.dp),
+                        shape     = RoundedCornerShape(14.dp),
+                        colors    = ButtonDefaults.buttonColors(containerColor = Warning),
+                        elevation = ButtonDefaults.buttonElevation(4.dp)
+                    ) {
+                        if (state.isProcessing) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        else {
+                            Icon(Icons.AutoMirrored.Rounded.AssignmentReturn, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Process Return · Refund ${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netRefund)}", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick  = { viewModel.onIntent(SalesReturnIntent.SaveReturn) },
-                colors   = ButtonDefaults.buttonColors(containerColor = Warning),
-                shape    = RoundedCornerShape(10.dp),
-                enabled  = state.foundSale != null
-            ) { Text("Record Return") }
-        },
-        dismissButton = {
-            TextButton(onClick = { viewModel.onIntent(SalesReturnIntent.DismissDialog) }) { Text("Cancel") }
         }
-    )
+    }
 }

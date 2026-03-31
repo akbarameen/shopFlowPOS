@@ -23,7 +23,23 @@ private const val PAGE_SIZE = 30
 class InventoryRepositoryImpl(private val db: DatabaseProvider) : InventoryRepository {
 
     // ── Row mapper ───────────────────────────────────────────────────────────
-
+    private fun mapSupplier(r: com.matechmatrix.shopflowpos.db.Supplier) = Supplier(
+        id                 = r.id,
+        name               = r.name,
+        phone              = r.phone,
+        whatsapp           = r.whatsapp,
+        email              = r.email,
+        address            = r.address,
+        city               = r.city,
+        ntn                = r.ntn,
+        openingBalance     = r.opening_balance,
+        outstandingBalance = r.outstanding_balance,
+        totalPurchased     = r.total_purchased,
+        notes              = r.notes,
+        isActive           = r.is_active == 1L,
+        createdAt          = r.created_at,
+        updatedAt          = r.updated_at
+    )
     private fun mapRow(row: com.matechmatrix.shopflowpos.db.Product) = Product(
         id                = row.id,
         name              = row.name,
@@ -193,7 +209,7 @@ class InventoryRepositoryImpl(private val db: DatabaseProvider) : InventoryRepos
     override suspend fun deactivateProduct(productId: String): AppResult<Unit> =
         withContext(Dispatchers.Default) {
             runCatching {
-                db.productQueries.softDelete(Clock.System.now().toEpochMilliseconds(), productId)
+                db.productQueries.softDeleteProduct(Clock.System.now().toEpochMilliseconds(), productId)
                 AppResult.Success(Unit)
             }.getOrElse { AppResult.Error(it.message ?: "Failed to deactivate product") }
         }
@@ -213,7 +229,7 @@ class InventoryRepositoryImpl(private val db: DatabaseProvider) : InventoryRepos
     override suspend fun getAllSuppliers(): AppResult<List<Supplier>> =
         withContext(Dispatchers.Default) {
             runCatching {
-                AppResult.Success(db.supplierQueries.getAllSuppliers().executeAsList().map { r ->
+                AppResult.Success(db.supplierQueries.getAllActiveSuppliers().executeAsList().map { r ->
                     Supplier(
                         id        = r.id,
                         name      = r.name,
@@ -221,9 +237,28 @@ class InventoryRepositoryImpl(private val db: DatabaseProvider) : InventoryRepos
                         address   = r.address,
                         email     = r.email,
                         notes     = r.notes,
-                        createdAt = r.created_at
+                        createdAt = r.created_at,
+                        updatedAt = r.updated_at
                     )
                 })
             }.getOrElse { AppResult.Error(it.message ?: "Failed to load suppliers") }
+        }
+
+    override suspend fun searchSuppliers(query: String): AppResult<List<Supplier>> =
+        withContext(Dispatchers.Default) {
+            runCatching {
+                AppResult.Success(
+                    db.supplierQueries.searchSuppliers(query, query).executeAsList().map(::mapSupplier)
+                )
+            }.getOrElse { AppResult.Error(it.message ?: "Search failed") }
+        }
+
+    override suspend fun getSupplierById(id: String): AppResult<Supplier> =
+        withContext(Dispatchers.Default) {
+            runCatching {
+                val row = db.supplierQueries.getSupplierById(id).executeAsOneOrNull()
+                    ?: return@withContext AppResult.Error("Supplier not found")
+                AppResult.Success(mapSupplier(row))
+            }.getOrElse { AppResult.Error(it.message ?: "Failed to get supplier") }
         }
 }

@@ -8,5 +8,5 @@ import org.koin.dsl.module
 
 val suppliersModule = module {
     single<SuppliersRepository> { SuppliersRepositoryImpl(db = get()) }
-    viewModel { SuppliersViewModel(get()) }
+    viewModel { SuppliersViewModel(repo = get()) }
 }

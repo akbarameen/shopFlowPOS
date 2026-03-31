@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
-    alias(libs.plugins.composeHotReload)
+    // alias(libs.plugins.composeHotReload) // Disabled due to "generateFunctionKeyMetaAnnotations" error
     alias(libs.plugins.kotlinSerialization)
 }
 
@@ -30,31 +30,30 @@ kotlin {
     jvm()
 
     sourceSets {
-        androidMain.dependencies {
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.activity.compose)
-            // Koin Android
-            implementation(libs.koin.android)
-        }
         commonMain.dependencies {
             // Compose
-            implementation(libs.compose.runtime)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.material3)
-            implementation(libs.compose.ui)
-            implementation(libs.compose.components.resources)
-            implementation(libs.compose.uiToolingPreview)
+            implementation(compose.runtime)
+            implementation(compose.foundation)
+            implementation(compose.material3)
+            implementation(compose.ui)
+            implementation(compose.components.resources)
+            implementation(compose.components.uiToolingPreview)
+            
             // Lifecycle
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            
             // Navigation
             implementation(libs.navigation.compose)
+            
             // Koin
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
+            
             // Coroutines
             implementation(libs.kotlinx.coroutines.core)
+            
             // DateTime
             implementation(libs.kotlinx.datetime)
 
@@ -64,7 +63,9 @@ kotlin {
             implementation(projects.core.coreDatabase)
             implementation(projects.core.coreNetwork)
             implementation(projects.core.coreUi)
+            
             implementation(libs.ktor.client.core)
+            
             // ─── Feature Modules ────────────────────────────────────────────
             implementation(projects.feature.featureAuth)
             implementation(projects.feature.featureDashboard)
@@ -83,15 +84,20 @@ kotlin {
 
             implementation(libs.compose.icons.extended)
             implementation(libs.compose.icons.core)
-            implementation(libs.kotlinx.datetime)
         }
+
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.koin.android)
+        }
+
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
-            implementation(libs.kotlinx.datetime)
         }
     }
 }

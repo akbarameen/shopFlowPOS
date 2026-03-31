@@ -45,17 +45,17 @@ fun SettingsScreen(
     Scaffold(
         snackbarHost   = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+    ) {
         if (state.isLoading) {
-            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().padding(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Primary)
             }
             return@Scaffold
         }
 
         when (windowSize) {
-            AppWindowSize.EXPANDED -> SettingsExpandedLayout(state, viewModel, innerPadding)
-            else                   -> SettingsSingleColumnLayout(state, viewModel, innerPadding, windowSize)
+            AppWindowSize.EXPANDED -> SettingsExpandedLayout(state, viewModel)
+            else                   -> SettingsSingleColumnLayout(state, viewModel,  windowSize)
         }
     }
 
@@ -105,11 +105,11 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSingleColumnLayout(
     state: SettingsState, viewModel: SettingsViewModel,
-    innerPadding: PaddingValues, windowSize: AppWindowSize
+    windowSize: AppWindowSize
 ) {
     val hPad = if (windowSize == AppWindowSize.MEDIUM) 24.dp else 16.dp
     LazyColumn(
-        Modifier.fillMaxSize().padding(innerPadding),
+        Modifier.fillMaxSize().padding(),
         contentPadding      = PaddingValues(horizontal = hPad, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -126,12 +126,11 @@ private fun SettingsSingleColumnLayout(
 @Composable
 private fun SettingsExpandedLayout(
     state: SettingsState, viewModel: SettingsViewModel,
-    innerPadding: PaddingValues
 ) {
     Row(
         Modifier
             .fillMaxSize()
-            .padding(innerPadding)
+            .padding()
             .padding(horizontal = 28.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
     ) {

@@ -1,121 +1,160 @@
 package com.matechmatrix.shopflowpos.feature.salesreturn.presentation
 
+import com.matechmatrix.shopflowpos.core.common.base.MviViewModel
 import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
-import com.matechmatrix.shopflowpos.core.common.util.IdGenerator
-import com.matechmatrix.shopflowpos.core.common.base.MviViewModel
-import com.matechmatrix.shopflowpos.core.model.Sale
-import com.matechmatrix.shopflowpos.core.model.SaleReturn
-import com.matechmatrix.shopflowpos.feature.salesreturn.domain.repository.SalesReturnRepository
-import kotlinx.datetime.Clock
+import com.matechmatrix.shopflowpos.core.model.enums.AccountType
+import com.matechmatrix.shopflowpos.core.model.enums.RefundMethod
+import com.matechmatrix.shopflowpos.feature.salesreturn.domain.repository.ReturnItemRequest
+import com.matechmatrix.shopflowpos.feature.salesreturn.domain.repository.ReturnRequest
+import com.matechmatrix.shopflowpos.feature.salesreturn.domain.usecase.*
 
-class SalesReturnViewModel(private val repo: SalesReturnRepository) :
-    MviViewModel<SalesReturnState, SalesReturnIntent, SalesReturnEffect>(SalesReturnState()) {
+class SalesReturnViewModel(
+    private val getReturns  : GetReturnsByDateRangeUseCase,
+    private val getSettings : GetSalesReturnSettingsUseCase,
+    private val lookupSale  : LookupSaleByInvoiceUseCase,
+    private val processReturn: ProcessSaleReturnUseCase,
+) : MviViewModel<SalesReturnState, SalesReturnIntent, SalesReturnEffect>(SalesReturnState()) {
 
-    init {
-        onIntent(SalesReturnIntent.Load)
-    }
+    init { onIntent(SalesReturnIntent.Load) }
 
     override suspend fun handleIntent(intent: SalesReturnIntent) {
         when (intent) {
             SalesReturnIntent.Load -> load()
-            SalesReturnIntent.ShowAddDialog -> setState {
+
+            SalesReturnIntent.ShowAddDialog -> {
+                val settings = getSettings()
+                setState {
+                    copy(
+                        showAddDialog    = true,
+                        searchInvoice    = "", foundSale = null, foundItems = emptyList(),
+                        saleSearchError  = null, formReason = "", formNotes = "",
+                        formDeductionPct = settings.defaultDeduction.toString(),
+                        formRefundMethod = RefundMethod.CASH,
+                        formAccountType  = AccountType.CASH,
+                        formAccountId    = settings.cashAccounts.firstOrNull()?.id ?: "default_cash",
+                        cashAccounts     = settings.cashAccounts,
+                        bankAccounts     = settings.bankAccounts,
+                        formError        = null, defaultDeduction = settings.defaultDeduction
+                    )
+                }
+            }
+
+            SalesReturnIntent.DismissDialog ->
+                setState { copy(showAddDialog = false, foundSale = null, foundItems = emptyList()) }
+
+            is SalesReturnIntent.SearchInvoice -> setState { copy(searchInvoice = intent.v, saleSearchError = null) }
+
+            SalesReturnIntent.LookupSale -> doLookup()
+
+            is SalesReturnIntent.SetItemQty -> setState {
+                copy(foundItems = foundItems.map {
+                    if (it.saleItem.id == intent.saleItemId)
+                        it.copy(returnedQty = intent.qty.coerceIn(0, it.saleItem.quantity))
+                    else it
+                })
+            }
+
+            is SalesReturnIntent.SetItemRestock -> setState {
+                copy(foundItems = foundItems.map {
+                    if (it.saleItem.id == intent.saleItemId) it.copy(restockItem = intent.restock) else it
+                })
+            }
+
+            is SalesReturnIntent.FormReason      -> setState { copy(formReason = intent.v) }
+            is SalesReturnIntent.FormNotes        -> setState { copy(formNotes = intent.v) }
+            is SalesReturnIntent.FormDeductionPct -> setState { copy(formDeductionPct = intent.v) }
+            is SalesReturnIntent.FormRefundMethod -> setState {
+                val defaultId = when (intent.v) {
+                    RefundMethod.CASH  -> cashAccounts.firstOrNull()?.id ?: "default_cash"
+                    RefundMethod.BANK  -> bankAccounts.firstOrNull()?.id ?: ""
+                    else               -> ""
+                }
                 copy(
-                    showAddDialog = true, searchInvoice = "", foundSale = null,
-                    saleSearchError = null, formReason = "", formRefundAmount = "",
-                    formRestockProductId = "", formRestockQty = "0", formError = null
+                    formRefundMethod = intent.v,
+                    formAccountType  = when (intent.v) { RefundMethod.BANK -> AccountType.BANK; else -> AccountType.CASH },
+                    formAccountId    = defaultId
                 )
             }
-            SalesReturnIntent.DismissDialog -> setState { copy(showAddDialog = false) }
-            is SalesReturnIntent.SearchInvoice -> setState { copy(searchInvoice = intent.v) }
-            SalesReturnIntent.LookupSale -> lookupSale()
-            is SalesReturnIntent.FormReason -> setState { copy(formReason = intent.v) }
-            is SalesReturnIntent.FormRefund -> setState { copy(formRefundAmount = intent.v) }
-            is SalesReturnIntent.FormRestockProductId -> setState { copy(formRestockProductId = intent.v) }
-            is SalesReturnIntent.FormRestockQty -> setState { copy(formRestockQty = intent.v) }
-            SalesReturnIntent.SaveReturn -> saveReturn()
+            is SalesReturnIntent.FormAccountType -> setState { copy(formAccountType = intent.v) }
+            is SalesReturnIntent.FormAccountId   -> setState { copy(formAccountId = intent.v) }
+
+            SalesReturnIntent.SaveReturn -> doProcessReturn()
         }
     }
 
     private suspend fun load() {
         setState { copy(isLoading = true) }
-        val currency = repo.getCurrencySymbol()
-        val range = DateTimeUtils.thisMonthRange()
-
-        when (val r = repo.getReturnsByDateRange(range.first, range.second)) {
+        val settings = getSettings()
+        val range    = DateTimeUtils.thisMonthRange()
+        when (val r = getReturns(range.first, range.second)) {
             is AppResult.Success -> setState {
                 copy(
-                    isLoading = false,
-                    returns = r.data.sortedByDescending { it.returnedAt },
-                    currencySymbol = currency
+                    isLoading      = false,
+                    returns        = r.data.sortedByDescending { it.returnedAt },
+                    currencySymbol = settings.currencySymbol,
+                    cashAccounts   = settings.cashAccounts,
+                    bankAccounts   = settings.bankAccounts,
+                    defaultDeduction = settings.defaultDeduction
                 )
             }
-            is AppResult.Error -> setState { copy(isLoading = false, formError = r.message) }
-            else -> setState { copy(isLoading = false) }
+            is AppResult.Error -> setState { copy(isLoading = false, error = r.message) }
+            else               -> setState { copy(isLoading = false) }
         }
     }
 
-    private suspend fun lookupSale() {
-        val invoice = currentState.searchInvoice.trim()
-        if (invoice.isBlank()) {
-            setState { copy(saleSearchError = "Enter invoice number") }
-            return
-        }
-        when (val r = repo.getSaleByInvoice(invoice)) {
+    private suspend fun doLookup() {
+        setState { copy(isSearching = true, saleSearchError = null, foundSale = null, foundItems = emptyList()) }
+        when (val r = lookupSale(state.value.searchInvoice)) {
             is AppResult.Success -> {
-                if (r.data == null) {
-                    setState { copy(saleSearchError = "Invoice not found", foundSale = null) }
-                } else {
-                    setState {
-                        copy(
-                            foundSale = r.data,
-                            saleSearchError = null,
-                            formRefundAmount = r.data!!.totalAmount.toString(),
-                            // Auto-select first item for restock by default
-                            formRestockProductId = r.data!!.items.firstOrNull()?.productId ?: ""
-                        )
-                    }
+                val (sale, items) = r.data ?: run {
+                    setState { copy(isSearching = false, saleSearchError = "Invoice not found") }
+                    return
+                }
+                setState {
+                    copy(
+                        isSearching   = false,
+                        foundSale     = sale,
+                        foundItems    = items.map { ReturnItemState(it) },
+                        saleSearchError = null
+                    )
                 }
             }
-            is AppResult.Error -> setState { copy(saleSearchError = r.message) }
-            else -> {}
+            is AppResult.Error -> setState { copy(isSearching = false, saleSearchError = r.message) }
+            else               -> setState { copy(isSearching = false) }
         }
     }
 
-    private suspend fun saveReturn() {
-        val s = currentState
+    private suspend fun doProcessReturn() {
+        val s    = state.value
         val sale = s.foundSale ?: return setState { copy(formError = "Look up a sale first") }
 
-        if (s.formReason.isBlank()) return setState { copy(formError = "Reason is required") }
+        setState { copy(isProcessing = true, formError = null) }
 
-        val refund = s.formRefundAmount.toDoubleOrNull() ?: 0.0
-        val restockQty = s.formRestockQty.toIntOrNull() ?: 0
-        val restockProductId = s.formRestockProductId.ifBlank { null }
-
-        // Find product details for the return record
-        val selectedItem = sale.items.find { it.productId == restockProductId } ?: sale.items.firstOrNull()
-
-        val saleReturn = SaleReturn(
-            id = IdGenerator.generate(),
-            originalSaleId = sale.id,
-            productId = selectedItem?.productId ?: "unknown",
-            productName = selectedItem?.productName ?: "Unknown Product",
-            returnedQuantity = restockQty.coerceAtLeast(1),
-            originalSellingPrice = selectedItem?.sellingPrice ?: 0.0,
-            deductionAmount = 0.0,
-            refundAmount = refund,
-            returnReason = s.formReason.trim(),
-            returnedAt = Clock.System.now().toEpochMilliseconds()
+        val request = ReturnRequest(
+            originalSaleId   = sale.id,
+            originalSale     = sale,
+            items            = s.foundItems.filter { it.returnedQty > 0 }.map {
+                ReturnItemRequest(it.saleItem, it.returnedQty, it.restockItem)
+            },
+            returnReason     = s.formReason.trim(),
+            notes            = s.formNotes.trim(),
+            refundMethod     = s.formRefundMethod,
+            accountType      = if (s.formRefundMethod == RefundMethod.STORE_CREDIT) null else s.formAccountType,
+            accountId        = if (s.formRefundMethod == RefundMethod.STORE_CREDIT) null else s.formAccountId,
+            deductionPercent = s.formDeductionPct.toDoubleOrNull() ?: 0.0,
+            customerId       = sale.customerId,
+            customerName     = sale.customerName
         )
 
-        when (val r = repo.insertReturn(saleReturn, restockProductId, restockQty)) {
+        when (val r = processReturn(request)) {
             is AppResult.Success -> {
-                setState { copy(showAddDialog = false) }
-                setEffect(SalesReturnEffect.Toast("Return processed successfully"))
+                setState { copy(isProcessing = false, showAddDialog = false) }
+                setEffect(SalesReturnEffect.ShowToast("Return ${r.data.returnNumber} processed — Refund: ${s.currencySymbol} ${s.netRefund.toLong()}"))
                 load()
             }
-            is AppResult.Error -> setState { copy(formError = r.message) }
-            else -> {}
+            is AppResult.Error -> setState { copy(isProcessing = false, formError = r.message) }
+            else               -> setState { copy(isProcessing = false) }
         }
     }
 }

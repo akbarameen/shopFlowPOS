@@ -1,30 +1,137 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: repair.sq
+-- Covers: repair_job · repair_payment
+--
+-- Status flow: RECEIVED → DIAGNOSING → WAITING_PARTS → IN_REPAIR → READY → DELIVERED | CANCELLED
+--
+-- FLOW on advance payment:
+--   1. insertRepairPayment
+--   2. updateRepairJobOnPayment (advance_paid +=, balance_due -=, payment_status)
+--   3. updateCashBalance / updateBankBalance + insertLedgerEntry (CREDIT, 'REPAIR_PAYMENT')
+-- ════════════════════════════════════════════════════════════════════════════
+
 CREATE TABLE IF NOT EXISTS repair_job (
-    id              TEXT    NOT NULL PRIMARY KEY,
-    customer_name   TEXT    NOT NULL,
-    customer_phone  TEXT    NOT NULL,
-    device_model    TEXT    NOT NULL,
-    problem         TEXT    NOT NULL,
-    estimated_cost  REAL    NOT NULL DEFAULT 0.0,
-    final_cost      REAL,
-    status          TEXT    NOT NULL DEFAULT 'PENDING',
-    notes           TEXT,
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
+    id                  TEXT    NOT NULL PRIMARY KEY,
+    job_number          TEXT    NOT NULL UNIQUE,        -- REP-00001
+    -- Customer (walk-in — not linked to customer table by default)
+    customer_name       TEXT    NOT NULL,
+    customer_phone      TEXT    NOT NULL,
+    customer_cnic       TEXT,
+    -- Device info
+    device_brand        TEXT    NOT NULL DEFAULT '',
+    device_model        TEXT    NOT NULL,
+    device_color        TEXT,
+    serial_number       TEXT,
+    imei                TEXT,
+    -- Problem
+    problem_description TEXT    NOT NULL,
+    diagnosis_notes     TEXT,
+    accessories_received TEXT,  -- "charger, box" etc.
+    -- Costs
+    estimated_cost      REAL    NOT NULL DEFAULT 0.0,
+    parts_cost          REAL    NOT NULL DEFAULT 0.0,
+    labour_cost         REAL    NOT NULL DEFAULT 0.0,
+    final_cost          REAL    NOT NULL DEFAULT 0.0,
+    -- Payments
+    advance_paid        REAL    NOT NULL DEFAULT 0.0,
+    balance_due         REAL    NOT NULL DEFAULT 0.0,
+    payment_status      TEXT    NOT NULL DEFAULT 'UNPAID',
+    -- 'UNPAID' | 'PARTIAL' | 'PAID'
+    -- Status
+    status              TEXT    NOT NULL DEFAULT 'RECEIVED',
+    -- 'RECEIVED' | 'DIAGNOSING' | 'WAITING_PARTS' | 'IN_REPAIR' | 'READY' | 'DELIVERED' | 'CANCELLED'
+    notes               TEXT,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS repair_payment (
+    id          TEXT    NOT NULL PRIMARY KEY,
+    job_id      TEXT    NOT NULL REFERENCES repair_job(id) ON DELETE RESTRICT,
+    amount      REAL    NOT NULL,
+    account_type TEXT   NOT NULL,   -- 'CASH' | 'BANK'
+    account_id  TEXT    NOT NULL,
+    notes       TEXT,
+    paid_at     INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_repair_status    ON repair_job(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_repair_phone     ON repair_job(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_repair_imei      ON repair_job(imei) WHERE imei IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_repair_date      ON repair_job(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_repair_pay_job   ON repair_payment(job_id, paid_at ASC);
+
 insertRepairJob:
-INSERT INTO repair_job VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO repair_job (id, job_number, customer_name, customer_phone, customer_cnic, device_brand, device_model, device_color, serial_number, imei, problem_description, diagnosis_notes, accessories_received, estimated_cost, parts_cost, labour_cost, final_cost, advance_paid, balance_due, payment_status, status, notes, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertRepairPayment:
+INSERT INTO repair_payment (id, job_id, amount, account_type, account_id, notes, paid_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateRepairJobOnPayment:
+UPDATE repair_job
+SET advance_paid    = advance_paid + :amount,
+    balance_due     = ROUND(final_cost - advance_paid - :amount, 2),
+    payment_status  = CASE
+        WHEN (advance_paid + :amount) >= final_cost THEN 'PAID'
+        WHEN (advance_paid + :amount) > 0           THEN 'PARTIAL'
+        ELSE 'UNPAID'
+    END,
+    updated_at = :now
+WHERE id = :jobId;
 
 updateRepairStatus:
-UPDATE repair_job SET status = ?, final_cost = ?, notes = ?, updated_at = ? WHERE id = ?;
+UPDATE repair_job
+SET status = ?, diagnosis_notes = ?, parts_cost = ?, labour_cost = ?,
+    final_cost = ?, balance_due = ROUND(? - advance_paid, 2), notes = ?, updated_at = ?
+WHERE id = ?;
 
-getAllRepairJobs:
-SELECT * FROM repair_job ORDER BY created_at DESC;
+setRepairFinalCost:
+UPDATE repair_job
+SET final_cost  = ?,
+    balance_due = ROUND(? - advance_paid, 2),
+    updated_at  = ?
+WHERE id = ?;
+
+getRepairJobById:
+SELECT * FROM repair_job WHERE id = ?;
+
+getRepairPayments:
+SELECT * FROM repair_payment WHERE job_id = ? ORDER BY paid_at ASC;
 
 getActiveRepairJobs:
 SELECT * FROM repair_job
 WHERE status NOT IN ('DELIVERED', 'CANCELLED')
 ORDER BY created_at DESC;
 
-getRepairJobById:
-SELECT * FROM repair_job WHERE id = ?;
+getRepairJobsByStatus:
+SELECT * FROM repair_job WHERE status = ? ORDER BY created_at DESC;
+
+getAllRepairJobs:
+SELECT * FROM repair_job
+ORDER BY created_at DESC
+LIMIT :limit OFFSET :offset;
+
+getRepairJobsByDateRange:
+SELECT * FROM repair_job WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC;
+
+searchRepairJobs:
+SELECT * FROM repair_job
+WHERE customer_name  LIKE ('%' || ? || '%')
+   OR customer_phone LIKE ('%' || ? || '%')
+   OR device_model   LIKE ('%' || ? || '%')
+   OR imei           LIKE ('%' || ? || '%')
+   OR job_number     LIKE ('%' || ? || '%')
+ORDER BY created_at DESC;
+
+-- Revenue from delivered repairs in a date range
+getRepairRevenueByDateRange:
+SELECT
+    COALESCE(SUM(final_cost),   0.0) AS total_billed,
+    COALESCE(SUM(advance_paid), 0.0) AS total_collected,
+    COALESCE(SUM(balance_due),  0.0) AS total_outstanding,
+    COUNT(*)                         AS job_count
+FROM repair_job
+WHERE status = 'DELIVERED'
+  AND updated_at BETWEEN ? AND ?;

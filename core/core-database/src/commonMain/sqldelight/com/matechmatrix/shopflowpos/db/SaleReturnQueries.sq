@@ -1,36 +1,86 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: sale_return.sq
+-- Redesigned: return header + line items (supports multi-item returns).
+--
+-- FLOW (all inside one db.transaction { } block):
+--   1. incrementSequence('RET') → return_number
+--   2. insertSaleReturn
+--   3. insertSaleReturnItem (× n)
+--   4. For each item where restock_item = 1 → incrementStock + insertStockMovement (SALE_RETURN)
+--   5. Issue refund: update account balance + insertLedgerEntry (DEBIT)
+--   6. Update sale.status (PARTIALLY_RETURNED or RETURNED)
+--   7. Update customer.outstanding_balance if original had a due
+-- ════════════════════════════════════════════════════════════════════════════
+ 
 CREATE TABLE IF NOT EXISTS sale_return (
-    id                      TEXT    NOT NULL PRIMARY KEY,
-    original_sale_id        TEXT    NOT NULL,
-    product_id              TEXT    NOT NULL,
-    product_name            TEXT    NOT NULL,
-    returned_quantity       INTEGER NOT NULL,
-    original_selling_price  REAL    NOT NULL,
-    deduction_amount        REAL    NOT NULL DEFAULT 0.0,
-    refund_amount           REAL    NOT NULL,
-    return_reason           TEXT    NOT NULL,
-    returned_at             INTEGER NOT NULL,
-    FOREIGN KEY (original_sale_id) REFERENCES sale(id)
+    id                  TEXT    NOT NULL PRIMARY KEY,
+    return_number       TEXT    NOT NULL UNIQUE,            -- RET-00001
+    original_sale_id    TEXT    NOT NULL REFERENCES sale(id) ON DELETE RESTRICT,
+    -- Customer snapshot
+    customer_id         TEXT,
+    customer_name       TEXT    NOT NULL DEFAULT '',
+    customer_phone      TEXT    NOT NULL DEFAULT '',
+    -- Financials
+    gross_refund_amount REAL    NOT NULL DEFAULT 0.0,   -- before deductions
+    deduction_amount    REAL    NOT NULL DEFAULT 0.0,   -- restocking / damage fee
+    net_refund_amount   REAL    NOT NULL DEFAULT 0.0,   -- actual money returned
+    -- Refund disbursement
+    refund_method       TEXT    NOT NULL DEFAULT 'CASH',-- 'CASH' | 'BANK' | 'STORE_CREDIT'
+    account_type        TEXT,                           -- NULL for STORE_CREDIT
+    account_id          TEXT,                           -- NULL for STORE_CREDIT
+    -- Meta
+    return_reason       TEXT    NOT NULL DEFAULT '',
+    notes               TEXT,
+    returned_at         INTEGER NOT NULL
 );
-
-insertReturn:
-INSERT INTO sale_return VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+ 
+CREATE TABLE IF NOT EXISTS sale_return_item (
+    id                      TEXT    NOT NULL PRIMARY KEY,
+    return_id               TEXT    NOT NULL REFERENCES sale_return(id) ON DELETE CASCADE,
+    original_sale_item_id   TEXT    NOT NULL,   -- sale_item.id for traceability
+    product_id              TEXT    NOT NULL,
+    product_name            TEXT    NOT NULL,   -- snapshot
+    imei                    TEXT,               -- if IMEI-tracked
+    returned_quantity       INTEGER NOT NULL,
+    unit_price              REAL    NOT NULL,   -- original selling price per unit
+    restock_item            INTEGER NOT NULL DEFAULT 1, -- 1 = put back in inventory
+    line_refund             REAL    NOT NULL    -- (unit_price * qty) - per-item deduction
+);
+ 
+CREATE INDEX IF NOT EXISTS idx_return_sale         ON sale_return(original_sale_id);
+CREATE INDEX IF NOT EXISTS idx_return_customer     ON sale_return(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_return_date         ON sale_return(returned_at DESC);
+CREATE INDEX IF NOT EXISTS idx_return_item_return  ON sale_return_item(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_item_product ON sale_return_item(product_id);
+ 
+insertSaleReturn:
+INSERT INTO sale_return (id, return_number, original_sale_id, customer_id, customer_name, customer_phone, gross_refund_amount, deduction_amount, net_refund_amount, refund_method, account_type, account_id, return_reason, notes, returned_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
+insertSaleReturnItem:
+INSERT INTO sale_return_item (id, return_id, original_sale_item_id, product_id, product_name, imei, returned_quantity, unit_price, restock_item, line_refund)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
+getReturnById:
+SELECT * FROM sale_return WHERE id = ?;
+ 
+getReturnItems:
+SELECT * FROM sale_return_item WHERE return_id = ?;
+ 
+getReturnsBySale:
+SELECT * FROM sale_return WHERE original_sale_id = ? ORDER BY returned_at DESC;
+ 
 getReturnsByDateRange:
 SELECT * FROM sale_return
 WHERE returned_at BETWEEN ? AND ?
 ORDER BY returned_at DESC;
-
-getReturnsBySaleId:
-SELECT * FROM sale_return WHERE original_sale_id = ?;
-
-getTotalDeductionsByDateRange:
-SELECT COALESCE(SUM(deduction_amount), 0.0) FROM sale_return
-WHERE returned_at BETWEEN ? AND ?;
-
+ 
 getTotalRefundsByDateRange:
-SELECT COALESCE(SUM(refund_amount), 0.0) FROM sale_return
+SELECT
+    COALESCE(SUM(gross_refund_amount), 0.0) AS gross_refund,
+    COALESCE(SUM(deduction_amount),    0.0) AS total_deductions,
+    COALESCE(SUM(net_refund_amount),   0.0) AS net_refund,
+    COUNT(*)                                AS return_count
+FROM sale_return
 WHERE returned_at BETWEEN ? AND ?;
-
-countReturnsByDateRange:
-SELECT COUNT(*) FROM sale_return
-WHERE returned_at BETWEEN ? AND ?;
+ 

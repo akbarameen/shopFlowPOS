@@ -1,0 +1,61 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: stock_movement.sq
+-- Purpose: Immutable audit trail of every inventory change.
+-- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS stock_movement (
+    id              TEXT    NOT NULL PRIMARY KEY,
+    product_id      TEXT    NOT NULL,
+    product_name    TEXT    NOT NULL,   -- snapshot at time of movement
+    movement_type   TEXT    NOT NULL,
+    -- 'OPENING'          → initial stock when product first added
+    -- 'PURCHASE'         → received via a purchase order
+    -- 'SALE'             → sold to a customer
+    -- 'SALE_RETURN'      → customer returned item (stock back in)
+    -- 'PURCHASE_RETURN'  → item returned to supplier (stock out)
+    -- 'ADJUSTMENT_IN'    → manual positive correction
+    -- 'ADJUSTMENT_OUT'   → manual negative correction (damage, loss, etc.)
+    reference_type  TEXT,               -- 'PURCHASE_ORDER' | 'SALE' | 'SALE_RETURN' | 'MANUAL'
+    reference_id    TEXT,               -- ID of the triggering document
+    quantity_before INTEGER NOT NULL,
+    quantity_change INTEGER NOT NULL,   -- positive = stock in, negative = stock out
+    quantity_after  INTEGER NOT NULL,
+    unit_cost       REAL,               -- cost per unit at movement time (for COGS / valuation)
+    notes           TEXT,
+    created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sm_product   ON stock_movement(product_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sm_type      ON stock_movement(movement_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sm_reference ON stock_movement(reference_type, reference_id);
+CREATE INDEX IF NOT EXISTS idx_sm_date      ON stock_movement(created_at DESC);
+
+insertStockMovement:
+INSERT INTO stock_movement (id, product_id, product_name, movement_type, reference_type, reference_id, quantity_before, quantity_change, quantity_after, unit_cost, notes, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+getMovementsByProduct:
+SELECT * FROM stock_movement
+WHERE product_id = ?
+ORDER BY created_at DESC
+LIMIT :limit OFFSET :offset;
+
+getMovementsByDateRange:
+SELECT * FROM stock_movement
+WHERE created_at BETWEEN ? AND ?
+ORDER BY created_at DESC;
+
+getMovementsByType:
+SELECT * FROM stock_movement
+WHERE movement_type = ?
+ORDER BY created_at DESC
+LIMIT :limit OFFSET :offset;
+
+-- Total units purchased vs sold for a product (for lifetime COGS)
+getProductMovementSummary:
+SELECT
+    product_id,
+    COALESCE(SUM(CASE WHEN quantity_change > 0 THEN  quantity_change ELSE 0 END), 0) AS total_in,
+    COALESCE(SUM(CASE WHEN quantity_change < 0 THEN -quantity_change ELSE 0 END), 0) AS total_out
+FROM stock_movement
+WHERE product_id = ?;

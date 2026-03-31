@@ -1,34 +1,63 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: expense.sq
+--
+-- FLOW when recording an expense:
+--   1. insertExpense
+--   2. updateCashBalance / updateBankBalance  (debit)
+--   3. insertLedgerEntry  (DEBIT, reference_type = 'EXPENSE')
+-- ════════════════════════════════════════════════════════════════════════════
+ 
 CREATE TABLE IF NOT EXISTS expense (
     id              TEXT    NOT NULL PRIMARY KEY,
     category        TEXT    NOT NULL,
+    -- 'RENT' | 'UTILITIES' | 'SALARIES' | 'MARKETING' | 'REPAIRS' |
+    -- 'SUPPLIES' | 'TRANSPORT' | 'TAXES' | 'OTHER'
     title           TEXT    NOT NULL,
     amount          REAL    NOT NULL,
-    account_type    TEXT    NOT NULL DEFAULT 'CASH',
-    bank_account_id TEXT,
+    account_type    TEXT    NOT NULL DEFAULT 'CASH',    -- 'CASH' | 'BANK'
+    account_id      TEXT    NOT NULL DEFAULT 'default_cash',
+    receipt_ref     TEXT,       -- physical receipt / voucher number
     notes           TEXT,
     created_at      INTEGER NOT NULL
 );
-
+ 
+CREATE INDEX IF NOT EXISTS idx_expense_date     ON expense(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_expense_category ON expense(category, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_expense_account  ON expense(account_type, account_id, created_at DESC);
+ 
 insertExpense:
-INSERT INTO expense VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-
+INSERT INTO expense (id, category, title, amount, account_type, account_id, receipt_ref, notes, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+ 
 updateExpense:
-UPDATE expense SET category = ?, title = ?, amount = ?, notes = ?, account_type = ?, bank_account_id = ? WHERE id = ?;
-
+UPDATE expense
+SET category = ?, title = ?, amount = ?, account_type = ?, account_id = ?, receipt_ref = ?, notes = ?
+WHERE id = ?;
+ 
 deleteExpense:
 DELETE FROM expense WHERE id = ?;
-
+ 
+getExpenseById:
+SELECT * FROM expense WHERE id = ?;
+ 
 getExpensesByDateRange:
 SELECT * FROM expense
 WHERE created_at BETWEEN ? AND ?
 ORDER BY created_at DESC;
-
-getTotalExpensesByDateRange:
-SELECT COALESCE(SUM(amount), 0.0) FROM expense
-WHERE created_at BETWEEN ? AND ?;
-
+ 
 getExpensesByCategory:
 SELECT category, COALESCE(SUM(amount), 0.0) AS total
 FROM expense
 WHERE created_at BETWEEN ? AND ?
-GROUP BY category;
+GROUP BY category
+ORDER BY total DESC;
+ 
+getTotalExpensesByDateRange:
+SELECT COALESCE(SUM(amount), 0.0) FROM expense
+WHERE created_at BETWEEN ? AND ?;
+ 
+getTotalExpensesByAccount:
+SELECT COALESCE(SUM(amount), 0.0) FROM expense
+WHERE account_type = :accountType AND account_id = :accountId
+  AND created_at BETWEEN :from AND :to;
+ 

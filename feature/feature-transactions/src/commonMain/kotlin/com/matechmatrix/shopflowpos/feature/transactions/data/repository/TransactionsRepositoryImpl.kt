@@ -4,7 +4,7 @@ import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
 import com.matechmatrix.shopflowpos.core.database.DatabaseProvider
 import com.matechmatrix.shopflowpos.core.model.Sale
-import com.matechmatrix.shopflowpos.core.model.enums.PaymentMethod
+import com.matechmatrix.shopflowpos.core.model.enums.PaymentStatus
 import com.matechmatrix.shopflowpos.core.model.enums.SaleStatus
 import com.matechmatrix.shopflowpos.feature.transactions.domain.repository.TransactionsRepository
 import kotlinx.coroutines.Dispatchers
@@ -17,19 +17,23 @@ class TransactionsRepositoryImpl(private val db: DatabaseProvider) : Transaction
         invoiceNumber = row.invoice_number,
         customerId = row.customer_id,
         customerName = row.customer_name,
-        items = emptyList(), // Items can be fetched separately if needed
+        customerPhone = row.customer_phone,
+        customerCnic = row.customer_cnic,
+        customerAddress = row.customer_address,
         subtotal = row.subtotal,
-        discount = row.discount,
+        discountAmount = row.discount_amount,
+        taxAmount = row.tax_amount,
         totalAmount = row.total_amount,
         costTotal = row.cost_total,
         grossProfit = row.gross_profit,
-        paymentMethod = runCatching { PaymentMethod.valueOf(row.payment_method) }.getOrDefault(PaymentMethod.CASH),
-        cashAmount = row.cash_amount,
-        bankAmount = row.bank_amount,
-        bankAccountId = row.bank_account_id,
+        paidAmount = row.paid_amount,
+        dueAmount = row.due_amount,
+        paymentStatus = runCatching { PaymentStatus.valueOf(row.payment_status) }.getOrDefault(PaymentStatus.PAID),
+        dueDate = row.due_date,
         status = runCatching { SaleStatus.valueOf(row.status) }.getOrDefault(SaleStatus.COMPLETED),
         notes = row.notes,
-        soldAt = row.sold_at
+        soldAt = row.sold_at,
+        updatedAt = row.updated_at
     )
 
     override suspend fun getSalesByDateRange(startMs: Long, endMs: Long): AppResult<List<Sale>> = withContext(Dispatchers.Default) {

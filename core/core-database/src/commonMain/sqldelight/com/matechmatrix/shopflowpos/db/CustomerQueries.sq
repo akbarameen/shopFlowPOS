@@ -1,37 +1,90 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- FILE: customer.sq
+-- ════════════════════════════════════════════════════════════════════════════
+ 
 CREATE TABLE IF NOT EXISTS customer (
     id                  TEXT    NOT NULL PRIMARY KEY,
     name                TEXT    NOT NULL,
     phone               TEXT    NOT NULL DEFAULT '',
-    cnic                TEXT,
+    whatsapp            TEXT,
+    cnic                TEXT,                           -- National ID (PK)
+    email               TEXT,
     address             TEXT    NOT NULL DEFAULT '',
-    notes               TEXT,
+    city                TEXT    NOT NULL DEFAULT '',
+    -- Credit management
+    credit_limit        REAL    NOT NULL DEFAULT 0.0,   -- 0 = no credit limit enforced
+    opening_balance     REAL    NOT NULL DEFAULT 0.0,   -- owed at time of setup
+    outstanding_balance REAL    NOT NULL DEFAULT 0.0,   -- amount currently owed BY customer
+    -- Lifetime stats (denormalised for performance)
     total_purchases     REAL    NOT NULL DEFAULT 0.0,
     total_transactions  INTEGER NOT NULL DEFAULT 0,
-    created_at          INTEGER NOT NULL
+    -- Meta
+    notes               TEXT,
+    is_active           INTEGER NOT NULL DEFAULT 1,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
 );
-
+ 
+CREATE INDEX IF NOT EXISTS idx_customer_active  ON customer(is_active, name ASC);
+CREATE INDEX IF NOT EXISTS idx_customer_phone   ON customer(phone);
+CREATE INDEX IF NOT EXISTS idx_customer_cnic    ON customer(cnic) WHERE cnic IS NOT NULL;
+ 
 insertCustomer:
-INSERT INTO customer VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+INSERT INTO customer (id, name, phone, whatsapp, cnic, email, address, city, credit_limit, opening_balance, outstanding_balance, total_purchases, total_transactions, notes, is_active, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0, ?, 1, ?, ?);
+ 
 updateCustomer:
-UPDATE customer SET name = ?, phone = ?, cnic = ?, address = ?, notes = ? WHERE id = ?;
-
-updateCustomerStats:
-UPDATE customer SET
-    total_purchases = total_purchases + ?,
-    total_transactions = total_transactions + 1
+UPDATE customer
+SET name = ?, phone = ?, whatsapp = ?, cnic = ?, email = ?, address = ?, city = ?, credit_limit = ?, notes = ?, updated_at = ?
 WHERE id = ?;
+ 
+-- Called after a sale is recorded (inside the sale transaction)
+updateCustomerAfterSale:
+UPDATE customer
+SET outstanding_balance = outstanding_balance + :dueAmount,
+    total_purchases     = total_purchases     + :saleTotal,
+    total_transactions  = total_transactions  + 1,
+    updated_at          = :now
+WHERE id = :customerId;
+ 
+-- Called after a sale payment is received
+-- decrementCustomerOutstanding:
+-- UPDATE customer
+-- SET outstanding_balance = MAX(0.0, outstanding_balance - ?),
+--     updated_at = ?
+-- WHERE id = ?;
 
-getAllCustomers:
-SELECT * FROM customer ORDER BY name ASC;
-
-getCustomerById:
-SELECT * FROM customer WHERE id = ?;
-
+decrementCustomerOutstanding:
+UPDATE customer
+SET outstanding_balance = MAX(0.0, outstanding_balance - :amount),
+    updated_at = :now
+WHERE id = :customerId;
+ 
+getAllActiveCustomers:
+SELECT * FROM customer WHERE is_active = 1 ORDER BY name ASC;
+ 
 searchCustomers:
 SELECT * FROM customer
-WHERE name LIKE ('%' || ? || '%') OR phone LIKE ('%' || ? || '%') OR cnic LIKE ('%' || ? || '%')
+WHERE is_active = 1
+  AND (
+    name  LIKE ('%' || :q || '%') OR
+    phone LIKE ('%' || :q || '%') OR
+    cnic  LIKE ('%' || :q || '%')
+  )
 ORDER BY name ASC;
-
-deleteCustomer:
-DELETE FROM customer WHERE id = ?;
+ 
+getCustomerById:
+SELECT * FROM customer WHERE id = ?;
+ 
+softDeleteCustomer:
+UPDATE customer SET is_active = 0, updated_at = ? WHERE id = ?;
+ 
+getCustomersWithDues:
+SELECT * FROM customer
+WHERE outstanding_balance > 0 AND is_active = 1
+ORDER BY outstanding_balance DESC;
+ 
+-- For credit limit check before a sale
+getCustomerCreditInfo:
+SELECT outstanding_balance, credit_limit FROM customer WHERE id = ?;
+ 

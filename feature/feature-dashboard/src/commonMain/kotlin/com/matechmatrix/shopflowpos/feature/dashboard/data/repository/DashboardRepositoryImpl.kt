@@ -5,10 +5,7 @@ import com.matechmatrix.shopflowpos.core.common.util.DateTimeUtils
 import com.matechmatrix.shopflowpos.core.database.DatabaseProvider
 import com.matechmatrix.shopflowpos.core.model.Product
 import com.matechmatrix.shopflowpos.core.model.Sale
-import com.matechmatrix.shopflowpos.core.model.enums.PaymentMethod
-import com.matechmatrix.shopflowpos.core.model.enums.ProductCategory
-import com.matechmatrix.shopflowpos.core.model.enums.ProductCondition
-import com.matechmatrix.shopflowpos.core.model.enums.SaleStatus
+import com.matechmatrix.shopflowpos.core.model.enums.*
 import com.matechmatrix.shopflowpos.feature.dashboard.domain.repository.DashboardRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -59,7 +56,7 @@ class DashboardRepositoryImpl(
 
     override suspend fun getCashBalance(): AppResult<Double> = withContext(Dispatchers.Default) {
         try {
-            val balance = db.ledgerQueries.getCashBalance().executeAsOne()
+            val balance = db.ledgerQueries.getTotalCashBalance().executeAsOne()
             AppResult.Success(balance)
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed to get cash balance")
@@ -81,24 +78,27 @@ class DashboardRepositoryImpl(
             val rows = db.saleQueries.getSalesByDateRange(start, end).executeAsList()
             val sales = rows.takeLast(limit).map { row ->
                 Sale(
-                    id             = row.id,
-                    invoiceNumber  = row.invoice_number,
-                    customerId     = row.customer_id,
-                    customerName   = row.customer_name,
-                    subtotal       = row.subtotal,
-                    discount       = row.discount,
-                    totalAmount    = row.total_amount,
-                    costTotal      = row.cost_total,
-                    grossProfit    = row.gross_profit,
-                    paymentMethod  = PaymentMethod.valueOf(row.payment_method),
-                    cashAmount     = row.cash_amount,
-                    bankAmount     = row.bank_amount,
-                    bankAccountId  = row.bank_account_id,
-                    dueAmount      = row.due_amount,
-                    dueDate        = row.due_date,
-                    status         = SaleStatus.valueOf(row.status),
-                    notes          = row.notes,
-                    soldAt         = row.sold_at
+                    id              = row.id,
+                    invoiceNumber   = row.invoice_number,
+                    customerId      = row.customer_id,
+                    customerName    = row.customer_name,
+                    customerPhone   = row.customer_phone,
+                    customerCnic    = row.customer_cnic,
+                    customerAddress = row.customer_address,
+                    subtotal        = row.subtotal,
+                    discountAmount  = row.discount_amount,
+                    taxAmount       = row.tax_amount,
+                    totalAmount     = row.total_amount,
+                    costTotal       = row.cost_total,
+                    grossProfit     = row.gross_profit,
+                    paidAmount      = row.paid_amount,
+                    dueAmount       = row.due_amount,
+                    paymentStatus   = runCatching { PaymentStatus.valueOf(row.payment_status) }.getOrDefault(PaymentStatus.PAID),
+                    dueDate         = row.due_date,
+                    status          = runCatching { SaleStatus.valueOf(row.status) }.getOrDefault(SaleStatus.COMPLETED),
+                    notes           = row.notes,
+                    soldAt          = row.sold_at,
+                    updatedAt       = row.updated_at
                 )
             }
             AppResult.Success(sales)
@@ -118,8 +118,8 @@ class DashboardRepositoryImpl(
                     model             = row.model,
                     imei              = row.imei,
                     barcode           = row.barcode,
-                    category          = ProductCategory.valueOf(row.category),
-                    condition         = ProductCondition.valueOf(row.condition_type),
+                    category          = runCatching { ProductCategory.valueOf(row.category) }.getOrDefault(ProductCategory.PHONE),
+                    condition         = runCatching { ProductCondition.valueOf(row.condition_type) }.getOrDefault(ProductCondition.NEW),
                     ptaStatus         = row.pta_status,
                     costPrice         = row.cost_price,
                     sellingPrice      = row.selling_price,
@@ -128,7 +128,14 @@ class DashboardRepositoryImpl(
                     description       = row.notes,
                     isActive          = row.is_active == 1L,
                     createdAt         = row.created_at,
-                    updatedAt         = row.updated_at
+                    updatedAt         = row.updated_at,
+                    color             = row.color,
+                    storageGb         = row.storage_gb?.toInt(),
+                    ramGb             = row.ram_gb?.toInt(),
+                    romGb             = row.rom_gb?.toInt(),
+                    batteryMah        = row.battery_mah?.toInt(),
+                    screenSizeInch    = row.screen_size_inch?.toFloat(),
+                    processor         = row.processor
                 )
             }
             AppResult.Success(products)
@@ -155,7 +162,7 @@ class DashboardRepositoryImpl(
 
     override suspend fun getTotalInventoryValue(): AppResult<Double> = withContext(Dispatchers.Default) {
         try {
-            val total = db.productQueries.getTotalInventoryValue().executeAsOne()
+            val total = db.productQueries.getTotalInventoryCostValue().executeAsOne()
             AppResult.Success(total)
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed to get inventory value")
@@ -174,7 +181,6 @@ class DashboardRepositoryImpl(
     override suspend fun getWeeklyRevenue(startMs: Long): AppResult<Map<String, Double>> = withContext(Dispatchers.Default) {
         try {
             val results = db.saleQueries.getWeeklyRevenue(startMs).executeAsList()
-            // Ensure the Double? from DB is converted to a non-nullable Double
             AppResult.Success(results.associate { it.week to (it.revenue ?: 0.0) })
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed to get weekly revenue")
@@ -184,7 +190,6 @@ class DashboardRepositoryImpl(
     override suspend fun getMonthlyRevenue(startMs: Long): AppResult<Map<String, Double>> = withContext(Dispatchers.Default) {
         try {
             val results = db.saleQueries.getMonthlyRevenue(startMs).executeAsList()
-            // Ensure the Double? from DB is converted to a non-nullable Double
             AppResult.Success(results.associate { it.month to (it.revenue ?: 0.0) })
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed to get monthly revenue")
@@ -194,7 +199,6 @@ class DashboardRepositoryImpl(
     override suspend fun getYearlyRevenue(startMs: Long): AppResult<Map<String, Double>> = withContext(Dispatchers.Default) {
         try {
             val results = db.saleQueries.getYearlyRevenue(startMs).executeAsList()
-            // Ensure the Double? from DB is converted to a non-nullable Double
             AppResult.Success(results.associate { it.year to (it.revenue ?: 0.0) })
         } catch (e: Exception) {
             AppResult.Error(e.message ?: "Failed to get yearly revenue")
