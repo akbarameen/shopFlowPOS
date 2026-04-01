@@ -137,7 +137,7 @@ fun ExpensesScreen(
                         state.dateFilter.label,
                         style      = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color      = TextPrimary
+                        color      = MaterialTheme.colorScheme.onBackground
                     )
 //                    Text(
 //                        state.dateFilter.label,
@@ -400,7 +400,7 @@ private fun ExpenseCard(
                     expense.title,
                     style      = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color      = TextPrimary,
+                    color      = MaterialTheme.colorScheme.onBackground,
                     maxLines   = 1,
                     overflow   = TextOverflow.Ellipsis
                 )
@@ -516,7 +516,7 @@ private fun ExpenseFormSheet(
                         Text(
                             if (isEditing) "Edit Expense" else "Record Expense",
                             style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold, color = TextPrimary
+                            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             if (isEditing) "Update expense details" else "Fill in the expense information",
@@ -810,7 +810,7 @@ private fun ExpFormSection(
                         .clip(RoundedCornerShape(2.dp)).background(Primary)
                 )
                 Text(title, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold, color = TextPrimary)
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             }
         }
         content()

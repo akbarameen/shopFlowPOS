@@ -17,6 +17,9 @@ data class DashboardState(
     // Balances
     val cashBalance: Double = 0.0,
     val bankBalance: Double = 0.0,
+    // Dues
+    val totalReceivables: Double = 0.0,
+    val totalPayables: Double = 0.0,
     // Inventory stats
     val totalInventoryValue: Double = 0.0,
     val totalInventorySellingValue: Double = 0.0,

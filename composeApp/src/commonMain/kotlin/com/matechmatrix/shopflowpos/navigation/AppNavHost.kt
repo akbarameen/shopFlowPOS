@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.matechmatrix.shopflowpos.core.ui.adaptive.AppWindowSize
 import com.matechmatrix.shopflowpos.feature.customers.presentation.CustomersScreen
 import com.matechmatrix.shopflowpos.feature.dashboard.presentation.DashboardScreen
+import com.matechmatrix.shopflowpos.feature.dues.presentation.DuesScreen
 import com.matechmatrix.shopflowpos.feature.expenses.presentation.ExpensesScreen
 import com.matechmatrix.shopflowpos.feature.installments.presentation.InstallmentsScreen
 import com.matechmatrix.shopflowpos.feature.inventory.presentation.InventoryScreen
@@ -15,6 +16,7 @@ import com.matechmatrix.shopflowpos.feature.ledger.presentation.LedgerScreen
 import com.matechmatrix.shopflowpos.feature.pos.presentation.PosScreen
 import com.matechmatrix.shopflowpos.feature.repairs.presentation.RepairsScreen
 import com.matechmatrix.shopflowpos.feature.reports.presentation.ReportsScreen
+import com.matechmatrix.shopflowpos.feature.purchase.presentation.PurchaseScreen
 import com.matechmatrix.shopflowpos.feature.salesreturn.presentation.SalesReturnScreen
 import com.matechmatrix.shopflowpos.feature.settings.presentation.SettingsScreen
 import com.matechmatrix.shopflowpos.feature.suppliers.presentation.SuppliersScreen
@@ -140,6 +142,13 @@ fun AppNavHost(
 
         composable(AppRoute.Settings.route) {
             SettingsScreen(windowSize = windowSize)
+        }
+
+        composable(AppRoute.Purchase.route) {
+            PurchaseScreen(windowSize = windowSize)
+        }
+        composable(AppRoute.Dues.route) {
+            DuesScreen(windowSize = windowSize)
         }
 
         // ─── Future child/detail routes — add here ────────────────────────────

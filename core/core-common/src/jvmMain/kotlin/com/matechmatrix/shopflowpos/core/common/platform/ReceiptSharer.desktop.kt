@@ -21,4 +21,16 @@ private class DesktopReceiptSharer : ReceiptSharer {
         file.writeText(html)
         java.awt.Desktop.getDesktop().open(file)
     }
+
+    override fun shareReceiptAsPdf(html: String, fileName: String) {
+        val file = File(System.getProperty("user.home"), "Downloads/$fileName.html")
+        file.writeText(html)
+        java.awt.Desktop.getDesktop().open(file)
+    }
+
+    override fun saveReceiptAsPdf(html: String, fileName: String) {
+        val file = File(System.getProperty("user.home"), "Downloads/$fileName.html")
+        file.writeText(html)
+        java.awt.Desktop.getDesktop().open(file)
+    }
 }

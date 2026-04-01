@@ -55,6 +55,8 @@ class PosViewModel(
         when (intent) {
 
             PosIntent.Load -> loadData()
+            
+//            PosIntent.Refresh -> refreshTrigger.value++
 
             // ── Search / Filter ───────────────────────────────────────────────
             is PosIntent.Search -> {

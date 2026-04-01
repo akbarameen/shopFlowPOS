@@ -35,9 +35,11 @@ private val allDrawerItems = listOf(
     // ── MAIN ──
     DrawerNavItem(AppRoute.Dashboard.route,    "Dashboard",    "🏠", Icons.Rounded.Dashboard,          section = "MAIN"),
     DrawerNavItem(AppRoute.POS.route,          "POS Sale",     "🛒", Icons.Rounded.PointOfSale,         section = "MAIN"),
+    DrawerNavItem(AppRoute.Purchase.route,          "Purchase",     "🛒", Icons.Rounded.Sell,         section = "MAIN"),
     DrawerNavItem(AppRoute.Inventory.route,    "Products",     "📦", Icons.Rounded.Inventory2,          section = "MAIN"),
 
     // ── FINANCE ──
+    DrawerNavItem(AppRoute.Dues.route,         "Dues",         "🛒", Icons.Rounded.Balance,             section = "FINANCE"),
     DrawerNavItem(AppRoute.Transactions.route, "Sales",        "💰", Icons.Rounded.Receipt,             section = "FINANCE"),
     DrawerNavItem(AppRoute.Installments.route, "Installments", "📅", Icons.Rounded.CreditCard,          section = "FINANCE"),
     DrawerNavItem(AppRoute.SalesReturn.route,  "Returns",      "↩️", Icons.Rounded.AssignmentReturn,    section = "FINANCE"),

@@ -91,7 +91,7 @@ fun TransactionsScreen(
                 ) {
                     TxSumItem("${state.totalCount}", "Sales", Primary)
                     VerticalDivider(Modifier.height(36.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    TxSumItem(CurrencyFormatter.formatRs(state.totalRevenue), "Revenue", Success)
+                    TxSumItem("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.totalRevenue)}", "Revenue", Success)
                 }
             }
         }
@@ -274,7 +274,7 @@ private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
         }
         // Amount
         Text(
-            CurrencyFormatter.formatRs(sale.totalAmount),
+            "$currencySymbol ${CurrencyFormatter.formatRs(sale.totalAmount)}",
             modifier   = Modifier.weight(0.20f),
             style      = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
@@ -283,7 +283,7 @@ private fun TxTableRow(sale: Sale, currencySymbol: String, isEven: Boolean) {
         )
         // Due
         Text(
-            CurrencyFormatter.formatRs(sale.dueAmount),
+            "$currencySymbol ${CurrencyFormatter.formatRs(sale.dueAmount)}",
             modifier   = Modifier.weight(0.20f),
             style      = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
@@ -336,14 +336,14 @@ private fun TxCard(sale: Sale, currencySymbol: String) {
 
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    CurrencyFormatter.formatRs(sale.totalAmount),
+                    "$currencySymbol ${CurrencyFormatter.formatRs(sale.totalAmount)}",
                     style      = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color      = MaterialTheme.colorScheme.onSurface
                 )
                 if (sale.dueAmount > 0) {
                     Text(
-                        "Due: ${CurrencyFormatter.formatRs(sale.dueAmount)}",
+                        "Due: $currencySymbol ${CurrencyFormatter.formatRs(sale.dueAmount)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Danger, fontWeight = FontWeight.Bold
                     )

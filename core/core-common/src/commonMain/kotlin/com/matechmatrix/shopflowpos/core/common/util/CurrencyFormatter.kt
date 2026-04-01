@@ -1,10 +1,6 @@
 package com.matechmatrix.shopflowpos.core.common.util
 
 object CurrencyFormatter {
-
-    // Symbol can be changed from Settings (stored in DB)
-    var symbol: String = "Rs."
-
     fun format(amount: Double): String {
         val longAmount = amount.toLong()
         if (longAmount < 0) return "-${format(-amount)}"
@@ -15,7 +11,7 @@ object CurrencyFormatter {
                 append(c)
             }
         }.reversed()
-        return "$symbol $withCommas"
+        return withCommas
     }
 
     fun format(amount: Long): String = format(amount.toDouble())
@@ -26,15 +22,15 @@ object CurrencyFormatter {
     fun formatCompact(amount: Double): String = when {
         amount >= 1_000_000_000 -> {
             val value = (amount / 100_000_000).toLong() / 10.0
-            "$symbol ${value}B"
+            "${value}B"
         }
         amount >= 1_000_000 -> {
             val value = (amount / 100_000).toLong() / 10.0
-            "$symbol ${value}M"
+            "${value}M"
         }
         amount >= 1_000 -> {
             val value = (amount / 1_000).toLong()
-            "$symbol ${value}K"
+            "${value}K"
         }
         else -> format(amount)
     }

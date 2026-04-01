@@ -1,5 +1,8 @@
 package com.matechmatrix.shopflowpos.feature.ledger.data.repository
 
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.common.util.IdGenerator
 import com.matechmatrix.shopflowpos.core.database.DatabaseProvider
@@ -7,8 +10,10 @@ import com.matechmatrix.shopflowpos.core.model.*
 import com.matechmatrix.shopflowpos.core.model.enums.AccountType
 import com.matechmatrix.shopflowpos.core.model.enums.LedgerEntryType
 import com.matechmatrix.shopflowpos.core.model.enums.LedgerReferenceType
+import com.matechmatrix.shopflowpos.feature.ledger.data.paging.LedgerPagingSource
 import com.matechmatrix.shopflowpos.feature.ledger.domain.repository.LedgerRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
@@ -284,6 +289,13 @@ class LedgerRepositoryImpl(private val db: DatabaseProvider) : LedgerRepository 
                 )
             }.getOrElse { AppResult.Error(it.message ?: "Failed to load ledger") }
         }
+
+    override fun getLedgerEntriesPaged(startMs: Long, endMs: Long): Flow<PagingData<LedgerEntry>> {
+        return Pager(
+            config = PagingConfig(pageSize = 20, enablePlaceholders = false),
+            pagingSourceFactory = { LedgerPagingSource(db.ledgerQueries, startMs, endMs, ::mapEntry) }
+        ).flow
+    }
 
     // ── Aggregates ────────────────────────────────────────────────────────────
 

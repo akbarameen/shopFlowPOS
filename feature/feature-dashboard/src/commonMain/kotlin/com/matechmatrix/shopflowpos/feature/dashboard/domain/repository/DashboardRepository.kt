@@ -22,4 +22,6 @@ interface DashboardRepository {
     suspend fun getWeeklyRevenue(startMs: Long): AppResult<Map<String, Double>>
     suspend fun getMonthlyRevenue(startMs: Long): AppResult<Map<String, Double>>
     suspend fun getYearlyRevenue(startMs: Long): AppResult<Map<String, Double>>
+    suspend fun getTotalReceivables(): AppResult<Double>
+    suspend fun getTotalPayables(): AppResult<Double>
 }

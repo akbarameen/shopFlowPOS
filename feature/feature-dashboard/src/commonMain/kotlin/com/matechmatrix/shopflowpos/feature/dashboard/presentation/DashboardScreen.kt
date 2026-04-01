@@ -61,6 +61,12 @@ fun DashboardScreen(
         }
     }
 
+    // Refresh on return
+    DisposableEffect(Unit) {
+        viewModel.onIntent(DashboardIntent.Refresh)
+        onDispose {}
+    }
+
     val cols       = when (windowSize) { AppWindowSize.COMPACT -> 2; AppWindowSize.MEDIUM -> 3; else -> 4 }
     val isExpanded = windowSize == AppWindowSize.EXPANDED
 
@@ -212,7 +218,7 @@ private fun RevenueBarChart(
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -224,9 +230,9 @@ private fun RevenueBarChart(
                             )
                         )
                 )
-                
+
                 Spacer(Modifier.height(6.dp))
-                
+
                 Text(
                     text = when {
                         key.contains("-") -> key.split("-").last()
@@ -292,14 +298,14 @@ private fun DashGreetingHeader(state: DashboardState, viewModel: DashboardViewMo
 
 @Composable
 private fun DashInventoryValueCard(state: DashboardState) {
-    fun fmtRs(v: Double) = if (state.analyticsVisible) CurrencyFormatter.formatRs(v) else "••••"
+    fun fmtRs(v: Double) = if (state.analyticsVisible) "${state.currencySymbol}${CurrencyFormatter.formatRs(v)}" else "••••"
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Stock Valuation", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text("Business Health", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
                     Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(SuccessContainer).padding(12.dp)
@@ -318,14 +324,33 @@ private fun DashInventoryValueCard(state: DashboardState) {
                     }
                 }
             }
+            // Receivables & Payables
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(DangerContainer.copy(0.3f)).padding(12.dp)
+                ) {
+                    Column {
+                        Text("Payables (to Suppliers)", style = MaterialTheme.typography.labelSmall, color = Danger.copy(0.9f))
+                        Text(fmtRs(state.totalPayables), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Danger)
+                    }
+                }
+                Box(
+                    Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(WarningContainer.copy(0.3f)).padding(12.dp)
+                ) {
+                    Column {
+                        Text("Receivables (from Cust.)", style = MaterialTheme.typography.labelSmall, color = Warning.copy(0.9f))
+                        Text(fmtRs(state.totalReceivables), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Warning)
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun DashStatsSection(state: DashboardState, cols: Int) {
-    fun fmt(v: Double)   = if (state.analyticsVisible) CurrencyFormatter.format(v)   else "••••"
-    fun fmtRs(v: Double) = if (state.analyticsVisible) CurrencyFormatter.formatRs(v) else "••••"
+    fun fmt(v: Double)   = if (state.analyticsVisible) "${state.currencySymbol} ${CurrencyFormatter.format(v)}"   else "••••"
+    fun fmtRs(v: Double) = if (state.analyticsVisible) "${state.currencySymbol} ${CurrencyFormatter.formatRs(v)}" else "••••"
 
     val cards = listOf(
         StatCardData("💰", fmt(state.todayRevenue),     "TOTAL SALES",    "↑ ${state.todaySalesCount} orders",  true,  isPrimary = true),
@@ -484,7 +509,7 @@ private fun TxItem(sale: Sale, state: DashboardState) {
             Text(sale.customerName ?: "Walk-in Customer", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
-            if (state.analyticsVisible) CurrencyFormatter.formatRs(sale.totalAmount) else "••••",
+            if (state.analyticsVisible) "${state.currencySymbol} ${CurrencyFormatter.formatRs(sale.totalAmount)}" else "••••",
             fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface
         )
     }
@@ -492,7 +517,7 @@ private fun TxItem(sale: Sale, state: DashboardState) {
 
 @Composable
 private fun DashQuickStatsCard(state: DashboardState) {
-    fun fmt(v: Double) = if (state.analyticsVisible) CurrencyFormatter.format(v) else "••••"
+    fun fmt(v: Double) = if (state.analyticsVisible) "${state.currencySymbol} ${CurrencyFormatter.format(v)}" else "••••"
     Card(
         Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -543,4 +568,3 @@ private fun DashLowStockCard(state: DashboardState) {
         }
     }
 }
-

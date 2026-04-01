@@ -258,7 +258,7 @@ private fun CustomerCard(
                             customer.name,
                             style      = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color      = TextPrimary
+                            color      = MaterialTheme.colorScheme.onBackground
                         )
                         if (customer.phone.isNotBlank()) {
                             Text(
@@ -341,7 +341,7 @@ private fun CustomerCard(
 private fun LabelValue(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
-        Text(value, style = MaterialTheme.typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+        Text(value, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
     }
 }
 

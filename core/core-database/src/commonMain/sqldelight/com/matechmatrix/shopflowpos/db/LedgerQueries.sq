@@ -159,6 +159,12 @@ getLedgerByDateRange:
 SELECT * FROM ledger_entry
 WHERE created_at BETWEEN :from AND :to
 ORDER BY created_at DESC;
+
+getLedgerByDateRangePaged:
+SELECT * FROM ledger_entry
+WHERE created_at BETWEEN :from AND :to
+ORDER BY created_at DESC
+LIMIT :limit OFFSET :offset;
  
 getLedgerByAccountAndDateRange:
 SELECT * FROM ledger_entry

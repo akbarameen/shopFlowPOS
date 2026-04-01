@@ -1,13 +1,14 @@
 package com.matechmatrix.shopflowpos.core.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val LightColorScheme = lightColorScheme(
+ val LightColorScheme = lightColorScheme(
     primary            = Primary,
     onPrimary          = Color.White,
     primaryContainer   = PrimaryContainer,
@@ -26,7 +27,7 @@ private val LightColorScheme = lightColorScheme(
     onError            = Color.White
 )
 
-private val DarkColorScheme = darkColorScheme(
+val DarkColorScheme = darkColorScheme(
     primary            = Primary,
     onPrimary          = Color.White,
     primaryContainer   = PrimaryContainer,
@@ -44,16 +45,38 @@ private val DarkColorScheme = darkColorScheme(
     onError            = Color.White
 )
 
+//@Composable
+//fun ShopFlowTheme(
+//    darkTheme: Boolean = isSystemInDarkTheme(),
+//    dynamicColor: Boolean = true,
+//    content: @Composable () -> Unit
+//) {
+//    MaterialTheme(
+//        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
+////        colorScheme = DarkColorScheme,
+//        typography  = ShopFlowTypography,
+//        shapes      = ShopFlowShapes,
+//        content     = content
+//    )
+//}
+
+@Composable
+expect fun provideColorScheme(
+    darkTheme: Boolean,
+    dynamicColor: Boolean
+): ColorScheme
 @Composable
 fun ShopFlowTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val colors = provideColorScheme(darkTheme, dynamicColor)
+
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
-//        colorScheme = DarkColorScheme,
-        typography  = ShopFlowTypography,
-        shapes      = ShopFlowShapes,
-        content     = content
+        colorScheme = colors,
+        typography = ShopFlowTypography,
+        shapes = ShopFlowShapes,
+        content = content
     )
 }

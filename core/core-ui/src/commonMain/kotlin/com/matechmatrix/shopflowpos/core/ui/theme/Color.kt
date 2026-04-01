@@ -25,10 +25,10 @@ val Text3Dark        = Color(0xFF605880)
 val BorderColor      = BorderLight
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
-val Primary          = Color(0xFF6C47FF)
-val PrimaryVariant   = Color(0xFF8B6BFF)
-val PrimaryContainer = Color(0x1F6C47FF)   // 12% — active chip bg, selected nav bg
-val PrimaryFaint     = Color(0x0A6C47FF)   // 4%  — hover bg
+val Primary          = Color(0xFFF67280)
+val PrimaryVariant   = Color(0xFFC06C84)
+val PrimaryContainer = Color(0xFF6C5B7B)   // 12% — active chip bg, selected nav bg
+val PrimaryFaint     = Color(0x0F6C5B7B)   // 4%  — hover bg
 
 val Accent           = Color(0xFFFF6B35)
 val AccentContainer  = Color(0x1FFF6B35)
@@ -40,8 +40,8 @@ val SuccessContainer = Color(0x1F00C9A7)
 val Danger           = Color(0xFFFF4757)
 val DangerContainer  = Color(0x1FFF4757)
 
-val Warning          = Color(0xFFFFB830)
-val WarningContainer = Color(0x1FFFB830)
+val Warning          = Color(0xFFD7961B)
+val WarningContainer = Color(0x1FFF88AE)
 
 val Info             = Color(0xFF3D9EFF)
 val InfoContainer    = Color(0x1F3D9EFF)

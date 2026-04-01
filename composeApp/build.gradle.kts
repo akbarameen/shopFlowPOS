@@ -81,6 +81,8 @@ kotlin {
             implementation(projects.feature.featureInstallments)
             implementation(projects.feature.featureRepairs)
             implementation(projects.feature.featureSettings)
+            implementation(projects.feature.featurePurchase)
+            implementation(projects.feature.featureDues)
 
             implementation(libs.compose.icons.extended)
             implementation(libs.compose.icons.core)

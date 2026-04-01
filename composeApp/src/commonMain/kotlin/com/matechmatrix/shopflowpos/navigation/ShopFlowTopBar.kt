@@ -38,6 +38,8 @@ fun routeToTitle(route: String?): String = when (route) {
     AppRoute.Installments.route -> "Installments"
     AppRoute.Repairs.route      -> "Repairs"
     AppRoute.Settings.route     -> "Settings"
+    AppRoute.Purchase.route     -> "Purchase"
+    AppRoute.Dues.route         -> "Dues"
     AppRoute.Reviews.route      -> "Reviews"
     else                        -> "ShopFlowPOS"
 }

@@ -277,6 +277,20 @@ public class CustomerQueriesQueries(
     )
   }
 
+  public fun <T : Any> getTotalReceivables(mapper: (SUM: Double?) -> T): Query<T> =
+      Query(1_058_690_171, arrayOf("customer"), driver, "CustomerQueries.sq", "getTotalReceivables",
+      "SELECT SUM(outstanding_balance) FROM customer WHERE is_active = 1") { cursor ->
+    mapper(
+      cursor.getDouble(0)
+    )
+  }
+
+  public fun getTotalReceivables(): Query<GetTotalReceivables> = getTotalReceivables { SUM ->
+    GetTotalReceivables(
+      SUM
+    )
+  }
+
   public fun <T : Any> getCustomerCreditInfo(id: String, mapper: (outstanding_balance: Double,
       credit_limit: Double) -> T): Query<T> = GetCustomerCreditInfoQuery(id) { cursor ->
     mapper(

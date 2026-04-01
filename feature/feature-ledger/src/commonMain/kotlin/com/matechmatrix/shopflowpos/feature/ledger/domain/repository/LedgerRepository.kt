@@ -1,8 +1,10 @@
 package com.matechmatrix.shopflowpos.feature.ledger.domain.repository
 
+import androidx.paging.PagingData
 import com.matechmatrix.shopflowpos.core.common.result.AppResult
 import com.matechmatrix.shopflowpos.core.model.*
 import com.matechmatrix.shopflowpos.core.model.enums.AccountType
+import kotlinx.coroutines.flow.Flow
 
 interface LedgerRepository {
     // ── Cash Accounts ─────────────────────────────────────────────────────────
@@ -35,6 +37,8 @@ interface LedgerRepository {
     // ── Ledger History ────────────────────────────────────────────────────────
     suspend fun getLedgerEntries(startMs: Long, endMs: Long): AppResult<List<LedgerEntry>>
     suspend fun getLedgerByAccount(accountType: AccountType, accountId: String, limit: Long): AppResult<List<LedgerEntry>>
+    
+    fun getLedgerEntriesPaged(startMs: Long, endMs: Long): Flow<PagingData<LedgerEntry>>
 
     // ── Aggregates ────────────────────────────────────────────────────────────
     suspend fun getTotalLiquidBalance(): AppResult<Double>

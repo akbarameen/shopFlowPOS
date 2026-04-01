@@ -26,7 +26,7 @@ fun ShopFlowNavigationRail(
     ) {
         Spacer(Modifier.height(12.dp))
         // Only show the bottom nav items on rail (keep it concise on tablet)
-        bottomNavItems.forEach { item ->
+        drawerNavItems.forEach { item ->
             val selected = currentRoute == item.route
             NavigationRailItem(
                 selected  = selected,

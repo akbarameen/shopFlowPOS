@@ -25,11 +25,13 @@ val bottomNavItems = listOf(
 val drawerNavItems = listOf(
     NavItem(AppRoute.Dashboard.route,    "Dashboard",    Icons.Rounded.Dashboard,       "MAIN"),
     NavItem(AppRoute.POS.route,          "Point of Sale",Icons.Rounded.PointOfSale,     "MAIN"),
+    NavItem(AppRoute.Purchase.route,     "Purchase",     Icons.Rounded.Sell,            "MAIN"),
     NavItem(AppRoute.Inventory.route,    "Inventory",    Icons.Rounded.Inventory2,      "STOCK"),
     NavItem(AppRoute.Transactions.route, "Transactions", Icons.Rounded.Receipt,         "SALES"),
     NavItem(AppRoute.SalesReturn.route,  "Sales Return", Icons.Rounded.AssignmentReturn,"SALES"),
     NavItem(AppRoute.Customers.route,    "Customers",    Icons.Rounded.Group,           "PEOPLE"),
     NavItem(AppRoute.Suppliers.route,    "Suppliers",    Icons.Rounded.LocalShipping,   "PEOPLE"),
+    NavItem(AppRoute.Dues.route,         "Dues",         Icons.Rounded.Balance,  "FINANCE"),
     NavItem(AppRoute.Ledger.route,       "Cash & Bank",  Icons.Rounded.AccountBalance,  "FINANCE"),
     NavItem(AppRoute.Expenses.route,     "Expenses",     Icons.Rounded.Money,           "FINANCE"),
     NavItem(AppRoute.Reports.route,      "Reports",      Icons.Rounded.Analytics,       "FINANCE"),

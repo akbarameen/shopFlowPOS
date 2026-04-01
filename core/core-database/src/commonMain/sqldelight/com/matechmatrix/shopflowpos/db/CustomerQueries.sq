@@ -83,8 +83,10 @@ getCustomersWithDues:
 SELECT * FROM customer
 WHERE outstanding_balance > 0 AND is_active = 1
 ORDER BY outstanding_balance DESC;
+
+getTotalReceivables:
+SELECT SUM(outstanding_balance) FROM customer WHERE is_active = 1;
  
 -- For credit limit check before a sale
 getCustomerCreditInfo:
 SELECT outstanding_balance, credit_limit FROM customer WHERE id = ?;
- 

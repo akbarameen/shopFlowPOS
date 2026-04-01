@@ -15,5 +15,7 @@ sealed class AppRoute(val route: String) {
     data object Installments : AppRoute("installments")
     data object Repairs      : AppRoute("repairs")
     data object Settings     : AppRoute("settings")
+    data object Purchase     : AppRoute("Purchase")
+    data object Dues         : AppRoute("Dues")
     data object Reviews      : AppRoute("reviews")
 }

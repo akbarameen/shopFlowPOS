@@ -173,7 +173,7 @@ private fun ReportsExpanded(state: ReportsState) {
             elevation = CardDefaults.cardElevation(0.dp)
         ) {
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Top Products", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("Top Products", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 if (state.topProducts.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -306,7 +306,7 @@ private fun MetricCard(modifier: Modifier, label: String, value: String, icon: I
 private fun PaymentBreakdownCard(state: ReportsState) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(0.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Payment Breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Payment Breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
 
             PaymentRow("Cash Sales",     state.summary.cashRevenue, Icons.Rounded.Payments,       Success)
             PaymentRow("Bank / Transfer",state.summary.bankRevenue, Icons.Rounded.AccountBalance, Info)
@@ -335,7 +335,7 @@ private fun PaymentRow(label: String, amount: Double, icon: ImageVector, color: 
             Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(0.12f)), contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = color, modifier = Modifier.size(17.dp))
             }
-            Text(label, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground)
         }
         Text(fmt(amount), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = color)
     }
@@ -380,7 +380,7 @@ private fun ReturnsCard(state: ReportsState) {
 private fun TopProductsCard(state: ReportsState) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(0.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Top Products", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Top Products", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             val maxRevenue = state.topProducts.maxOfOrNull { it.revenue } ?: 1.0
             state.topProducts.forEachIndexed { idx, product ->
                 TopProductRow(product, maxRevenue, idx + 1)
@@ -399,7 +399,7 @@ private fun TopProductRow(product: TopProduct, maxRevenue: Double, rank: Int) {
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(product.name, style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(product.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text("×${product.qty}", style = MaterialTheme.typography.labelSmall, color = TextMuted)
             }
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = Primary, trackColor = PrimaryContainer)
@@ -423,7 +423,7 @@ private fun TopProductTableRow(product: TopProduct, maxRevenue: Double, rank: In
     ) {
         Text("$rank", Modifier.width(28.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Primary)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(product.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(product.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)), color = Primary, trackColor = PrimaryContainer)
         }
         Text("×${product.qty}", Modifier.width(40.dp), style = MaterialTheme.typography.labelSmall, color = TextMuted, textAlign = TextAlign.Center)
@@ -435,5 +435,5 @@ private fun TopProductTableRow(product: TopProduct, maxRevenue: Double, rank: In
 // ─────────────────────────────────────────────────────────────────────────────
 // Local formatters (keep off CurrencyFormatter to avoid coupling)
 // ─────────────────────────────────────────────────────────────────────────────
-private fun fmt(v: Double)        = CurrencyFormatter.formatRs(v)
+private fun fmt(v: Double)        =  CurrencyFormatter.formatRs(v)
 private fun fmtCompact(v: Double) = CurrencyFormatter.formatCompact(v)

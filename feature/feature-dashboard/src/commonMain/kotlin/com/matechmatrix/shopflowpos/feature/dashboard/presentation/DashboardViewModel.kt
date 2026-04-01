@@ -55,6 +55,10 @@ class DashboardViewModel(
             val cash           = (useCase.getCashBalance() as? AppResult.Success)?.data ?: 0.0
             val bank           = (useCase.getTotalBankBalance() as? AppResult.Success)?.data ?: 0.0
             
+            // Dues
+            val receivables    = (useCase.getTotalReceivables() as? AppResult.Success)?.data ?: 0.0
+            val payables       = (useCase.getTotalPayables() as? AppResult.Success)?.data ?: 0.0
+
             // Inventory Stats
             val invValue       = (useCase.getTotalInventoryValue() as? AppResult.Success)?.data ?: 0.0
             val invSellValue   = (useCase.getTotalInventorySellingValue() as? AppResult.Success)?.data ?: 0.0
@@ -85,6 +89,8 @@ class DashboardViewModel(
                     todaySalesCount  = salesCount,
                     cashBalance      = cash,
                     bankBalance      = bank,
+                    totalReceivables = receivables,
+                    totalPayables    = payables,
                     totalInventoryValue = invValue,
                     totalInventorySellingValue = invSellValue,
                     recentSales      = recentSales,

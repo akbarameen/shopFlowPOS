@@ -84,7 +84,7 @@ fun LedgerScreen(
                     item { BankAccountsSection(state, viewModel) }
                 }
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                    item { Text("Transaction History (30 days)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary) }
+                    item { Text("Transaction History (30 days)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) }
                     if (state.ledgerEntries.isEmpty()) {
                         item {
                             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -108,7 +108,7 @@ fun LedgerScreen(
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text("Accounts & Ledger", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Accounts & Ledger", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                         }
                         OutlinedButton(
                             onClick = { viewModel.onIntent(LedgerIntent.ShowAddCashDialog) },
@@ -126,7 +126,7 @@ fun LedgerScreen(
                 item { CashAccountsSection(state, viewModel) }
                 item { BankAccountsSection(state, viewModel) }
                 item {
-                    Text("Transaction History (30 days)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Transaction History (30 days)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 }
                 if (state.ledgerEntries.isEmpty()) {
                     item {
@@ -180,16 +180,16 @@ private fun TotalBalanceCard(state: LedgerState) {
                 Icon(Icons.Rounded.AccountBalance, null, tint = Color.White.copy(0.7f), modifier = Modifier.size(16.dp))
                 Text("Total Liquid Balance", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.7f))
             }
-            Text(CurrencyFormatter.formatRs(state.totalBalance), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
+            Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.totalBalance)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color.White)
             HorizontalDivider(color = Color.White.copy(0.2f))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Icon(Icons.Rounded.Payments, null, tint = Color.White.copy(0.6f), modifier = Modifier.size(14.dp))
-                    Text("Cash: ${CurrencyFormatter.formatRs(state.totalCash)}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(0.7f))
+                    Text("Cash: ${state.currencySymbol} ${CurrencyFormatter.formatRs(state.totalCash)}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(0.7f))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Icon(Icons.Rounded.CreditCard, null, tint = Color.White.copy(0.6f), modifier = Modifier.size(14.dp))
-                    Text("Bank: ${CurrencyFormatter.formatRs(state.totalBank)}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(0.7f))
+                    Text("Bank: ${state.currencySymbol} ${CurrencyFormatter.formatRs(state.totalBank)}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(0.7f))
                 }
             }
         }
@@ -204,7 +204,7 @@ private fun TotalBalanceCard(state: LedgerState) {
 private fun CashAccountsSection(state: LedgerState, viewModel: LedgerViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Cash Accounts", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Cash Accounts", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         }
         if (state.cashAccounts.isEmpty()) {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -232,7 +232,7 @@ private fun CashAccountCard(account: CashAccount, state: LedgerState, viewModel:
                 }
                 Column {
                     Text(account.name, style = MaterialTheme.typography.bodySmall, color = Success.copy(0.7f), fontWeight = FontWeight.SemiBold)
-                    Text(CurrencyFormatter.formatRs(account.balance), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Success)
+                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(account.balance)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Success)
                 }
             }
             Row {
@@ -256,7 +256,7 @@ private fun CashAccountCard(account: CashAccount, state: LedgerState, viewModel:
 @Composable
 private fun BankAccountsSection(state: LedgerState, viewModel: LedgerViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Bank Accounts", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Bank Accounts", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         if (state.bankAccounts.isEmpty()) {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) {
@@ -285,7 +285,7 @@ private fun BankAccountCard(account: BankAccount, state: LedgerState, viewModel:
                         Icon(Icons.Rounded.AccountBalance, null, tint = Info, modifier = Modifier.size(20.dp))
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(account.accountTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text(account.accountTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                         Text(account.bankName, style = MaterialTheme.typography.labelSmall, color = TextMuted)
                         if (account.accountNumber.isNotBlank()) Text(account.accountNumber, style = MaterialTheme.typography.labelSmall, color = TextMuted)
                         if (!account.iban.isNullOrBlank()) Text("IBAN: ${account.iban}", style = MaterialTheme.typography.labelSmall, color = TextMuted)
@@ -307,7 +307,7 @@ private fun BankAccountCard(account: BankAccount, state: LedgerState, viewModel:
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("Balance", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Text(CurrencyFormatter.formatRs(account.balance), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Info)
+                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(account.balance)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Info)
                 }
                 Surface(
                     onClick = {
@@ -394,7 +394,7 @@ private fun LedgerEntryRow(entry: LedgerEntry, currencySymbol: String) {
                     Text(
                         entry.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary,
+                        color = MaterialTheme.colorScheme.onBackground,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis // Ellipsis will now work correctly
                     )
@@ -421,14 +421,14 @@ private fun LedgerEntryRow(entry: LedgerEntry, currencySymbol: String) {
                 verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 Text(
-                    "${if (isCredit) "+" else "-"} ${CurrencyFormatter.formatRs(entry.amount)}",
+                    "${if (isCredit) "+" else "-"} $currencySymbol ${CurrencyFormatter.formatRs(entry.amount)}",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
                     color = if (isCredit) Success else Danger,
                     softWrap = false // Keep amount on one line
                 )
                 Text(
-                    "Bal: ${CurrencyFormatter.formatCompact(entry.balanceAfter)}",
+                    "Bal: $currencySymbol ${CurrencyFormatter.formatCompact(entry.balanceAfter)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextMuted,
                     softWrap = false

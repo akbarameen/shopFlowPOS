@@ -332,7 +332,7 @@ private fun SupplierTableRow(
         // Total purchased
         Box(Modifier.weight(0.15f), contentAlignment = Alignment.CenterEnd) {
             Text(
-                CurrencyFormatter.formatRs(s.totalPurchased),
+                "$currencySymbol ${CurrencyFormatter.formatRs(s.totalPurchased)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.End
@@ -343,7 +343,7 @@ private fun SupplierTableRow(
             if (s.outstandingBalance > 0) {
                 Surface(shape = RoundedCornerShape(100.dp), color = WarningContainer) {
                     Text(
-                        CurrencyFormatter.formatRs(s.outstandingBalance),
+                        "$currencySymbol ${CurrencyFormatter.formatRs(s.outstandingBalance)}",
                         Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         style      = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
@@ -447,7 +447,7 @@ private fun SupplierCard(
                         Text("Total Purchased",
                             style = MaterialTheme.typography.labelSmall, color = TextMuted)
                         Text(
-                            CurrencyFormatter.formatRs(s.totalPurchased),
+                            "$currencySymbol ${CurrencyFormatter.formatRs(s.totalPurchased)}",
                             style      = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.SemiBold,
                             color      = MaterialTheme.colorScheme.onSurface
@@ -460,7 +460,7 @@ private fun SupplierCard(
                                 style = MaterialTheme.typography.labelSmall, color = TextMuted)
                             Surface(shape = RoundedCornerShape(100.dp), color = WarningContainer) {
                                 Text(
-                                    CurrencyFormatter.formatRs(s.outstandingBalance),
+                                    "$currencySymbol ${CurrencyFormatter.formatRs(s.outstandingBalance)}",
                                     Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
                                     style      = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
@@ -573,7 +573,7 @@ private fun SupplierFormSheet(
                         Text(
                             if (isEditing) "Edit Supplier" else "New Supplier",
                             style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Text(
                             if (isEditing) "Update supplier details" else "Fill in supplier information",
@@ -738,7 +738,7 @@ private fun SupFormSection(
                         .clip(RoundedCornerShape(2.dp)).background(Primary)
                 )
                 Text(title, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold, color = TextPrimary)
+                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             }
         }
         content()

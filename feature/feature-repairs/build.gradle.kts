@@ -34,6 +34,9 @@ kotlin {
             implementation(libs.compose.icons.extended)
             implementation(libs.compose.icons.core)
             implementation(libs.kotlinx.datetime)
+            // Paging
+            implementation(libs.paging.common)
+            implementation(libs.paging.compose)
         }
     }
 }

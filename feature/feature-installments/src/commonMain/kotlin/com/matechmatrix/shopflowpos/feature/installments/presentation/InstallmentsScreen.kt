@@ -211,7 +211,7 @@ private fun InstallmentCard(plan: InstallmentPlan, currency: String, viewModel: 
                         Text(plan.customerName.first().uppercase(), style = MaterialTheme.typography.titleSmall, color = accentColor, fontWeight = FontWeight.ExtraBold)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(plan.customerName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text(plan.customerName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                         Text(plan.productName, style = MaterialTheme.typography.labelSmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (plan.customerPhone.isNotBlank()) Text(plan.customerPhone, style = MaterialTheme.typography.labelSmall, color = TextMuted)
                     }
@@ -281,7 +281,7 @@ private fun InstallmentCard(plan: InstallmentPlan, currency: String, viewModel: 
 }
 
 @Composable
-private fun AmountCell(label: String, amount: Double, currency: String, color: Color = TextPrimary) {
+private fun AmountCell(label: String, amount: Double, currency: String, color: Color = MaterialTheme.colorScheme.onBackground) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
         Text("$currency ${CurrencyFormatter.formatCompact(amount)}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = color)

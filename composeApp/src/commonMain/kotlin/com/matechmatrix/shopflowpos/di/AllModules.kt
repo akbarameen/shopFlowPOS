@@ -2,11 +2,13 @@ package com.matechmatrix.shopflowpos.di
 
 import com.matechmatrix.shopflowpos.feature.customers.di.customersModule
 import com.matechmatrix.shopflowpos.feature.dashboard.di.dashboardModule
+import com.matechmatrix.shopflowpos.feature.dues.di.duesModule
 import com.matechmatrix.shopflowpos.feature.expenses.di.expensesModule
 import com.matechmatrix.shopflowpos.feature.installments.di.installmentsModule
 import com.matechmatrix.shopflowpos.feature.inventory.di.inventoryModule
 import com.matechmatrix.shopflowpos.feature.ledger.di.ledgerModule
 import com.matechmatrix.shopflowpos.feature.pos.di.posModule
+import com.matechmatrix.shopflowpos.feature.purchase.di.purchaseModule
 import com.matechmatrix.shopflowpos.feature.repairs.di.repairsModule
 import com.matechmatrix.shopflowpos.feature.reports.di.reportsModule
 import com.matechmatrix.shopflowpos.feature.salesreturn.di.salesReturnModule
@@ -31,5 +33,8 @@ val allModules = listOf(
     reportsModule,
     installmentsModule,
     repairsModule,
-    settingsModule
+    settingsModule,
+    purchaseModule,
+    duesModule
+
 )

@@ -69,11 +69,10 @@ fun RepairsScreen(
             }
         },
         containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = hPad, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -190,7 +189,7 @@ fun RepairsScreen(
                         Text(repair.deviceModel, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text("Estimated: ${CurrencyFormatter.formatRs(repair.estimatedCost)}",
+                    Text("Estimated: ${state.currencySymbol} ${CurrencyFormatter.formatRs(repair.estimatedCost)}",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedTextField(
@@ -209,7 +208,7 @@ fun RepairsScreen(
                     val final = state.finalChargeInput.toDoubleOrNull() ?: 0.0
                     if (final > 0) {
                         Surface(shape = RoundedCornerShape(10.dp), color = SuccessContainer) {
-                            Text("Total to collect: ${CurrencyFormatter.formatRs(final)}",
+                            Text("Total to collect: ${state.currencySymbol} ${CurrencyFormatter.formatRs(final)}",
                                 Modifier.fillMaxWidth().padding(12.dp),
                                 color = Success, fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.bodyMedium)
@@ -269,7 +268,7 @@ private fun RepairDesktopTable(state: RepairsState, viewModel: RepairsViewModel)
 
             LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                 itemsIndexed(state.filtered, key = { _, r -> r.id }) { idx, repair ->
-                    RepairTableRow(repair, idx % 2 == 0, viewModel)
+                    RepairTableRow(repair, idx % 2 == 0, viewModel,state)
                     HorizontalDivider(
                         color     = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         thickness = 0.5.dp,
@@ -298,7 +297,7 @@ private fun RowScope.RepTHeader(
 }
 
 @Composable
-private fun RepairTableRow(repair: RepairJob, isEven: Boolean, viewModel: RepairsViewModel) {
+private fun RepairTableRow(repair: RepairJob, isEven: Boolean, viewModel: RepairsViewModel,state: RepairsState) {
     val statusColor = repairStatusColor(repair.status)
     Row(
         Modifier
@@ -322,7 +321,7 @@ private fun RepairTableRow(repair: RepairJob, isEven: Boolean, viewModel: Repair
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(CurrencyFormatter.formatRs(repair.finalCost.takeIf { it > 0 } ?: repair.estimatedCost),
+        Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(repair.finalCost.takeIf { it > 0 } ?: repair.estimatedCost)}",
             modifier = Modifier.weight(0.12f),
             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End)
@@ -410,11 +409,11 @@ private fun RepairCard(repair: RepairJob, currencySymbol: String, viewModel: Rep
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Est: ${CurrencyFormatter.formatRs(repair.estimatedCost)}",
+                    Text("Est: $currencySymbol ${CurrencyFormatter.formatRs(repair.estimatedCost)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (repair.finalCost > 0) {
-                        Text("Bill: ${CurrencyFormatter.formatRs(repair.finalCost)}",
+                        Text("Bill: $currencySymbol ${CurrencyFormatter.formatRs(repair.finalCost)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Success, fontWeight = FontWeight.Bold)
                     }

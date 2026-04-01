@@ -316,21 +316,25 @@ private fun StockUpdateDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Update Stock", fontWeight = FontWeight.Bold) },
-        text  = {
+        text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(product.name, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Text("Current: ${product.stock} units",
-                    style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                Text(
+                    product.name, style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    "Current: ${product.stock} units",
+                    style = MaterialTheme.typography.bodySmall, color = TextMuted
+                )
                 OutlinedTextField(
-                    value          = newStock,
-                    onValueChange  = { newStock = it },
-                    label          = { Text("New Quantity") },
-                    singleLine     = true,
-                    modifier       = Modifier.fillMaxWidth(),
-                    shape          = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                    colors         = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor   = Primary,
+                    value = newStock,
+                    onValueChange = { newStock = it },
+                    label = { Text("New Quantity") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Primary,
                         unfocusedBorderColor = BorderColor
                     ),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -342,8 +346,8 @@ private fun StockUpdateDialog(
         confirmButton = {
             Button(
                 onClick = { newStock.toIntOrNull()?.let { onConfirm(it) } },
-                colors  = ButtonDefaults.buttonColors(containerColor = Primary),
-                shape   = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = Primary),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             ) { Text("Update") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }

@@ -204,4 +204,22 @@ class DashboardRepositoryImpl(
             AppResult.Error(e.message ?: "Failed to get yearly revenue")
         }
     }
+
+    override suspend fun getTotalReceivables(): AppResult<Double> = withContext(Dispatchers.Default) {
+        try {
+            val total = db.customerQueries.getTotalReceivables().executeAsOne() ?: 0.0
+            AppResult.Success<Double>(total as Double) // Explicitly state <Double>
+        } catch (e: Exception) {
+            AppResult.Error(e.message ?: "Failed to get receivables")
+        }
+    }
+
+    override suspend fun getTotalPayables(): AppResult<Double> = withContext(Dispatchers.Default) {
+        try {
+            val total = db.supplierQueries.getTotalPayables().executeAsOne() ?: 0.0
+            AppResult.Success<Double>(total as Double)
+        } catch (e: Exception) {
+            AppResult.Error(e.message ?: "Failed to get payables")
+        }
+    }
 }

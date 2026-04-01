@@ -31,6 +31,8 @@ private val topLevelRoutes = setOf(
     AppRoute.Reports.route,
     AppRoute.Installments.route,
     AppRoute.Repairs.route,
+    AppRoute.Dues.route,
+    AppRoute.Purchase.route,
     AppRoute.Settings.route
 )
 

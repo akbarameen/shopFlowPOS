@@ -147,7 +147,7 @@ private fun ReturnCard(r: SaleReturn, currency: String) {
                 Icon(Icons.AutoMirrored.Rounded.AssignmentReturn, null, tint = Warning, modifier = Modifier.size(20.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(r.returnNumber, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(r.returnNumber, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 Text(r.customerName, style = MaterialTheme.typography.bodySmall, color = TextMuted)
                 Text(r.returnReason, style = MaterialTheme.typography.labelSmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(DateTimeUtils.formatDate(r.returnedAt), style = MaterialTheme.typography.labelSmall, color = TextMuted)
@@ -182,7 +182,7 @@ private fun ReturnDesktopTable(state: SalesReturnState) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(r.returnNumber, Modifier.weight(0.15f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Warning)
-                        Text(r.customerName, Modifier.weight(0.20f), style = MaterialTheme.typography.bodySmall, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.customerName, Modifier.weight(0.20f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(r.returnReason, Modifier.weight(0.25f), style = MaterialTheme.typography.bodySmall, color = TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(DateTimeUtils.formatDate(r.returnedAt), Modifier.weight(0.15f), style = MaterialTheme.typography.bodySmall, color = TextMuted)
                         Text("${state.currencySymbol} ${CurrencyFormatter.formatCompact(r.grossRefundAmount)}", Modifier.weight(0.12f), style = MaterialTheme.typography.bodySmall, color = TextMuted)
@@ -267,7 +267,7 @@ private fun ReturnAddDialog(state: SalesReturnState, viewModel: SalesReturnViewM
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
-                                        Text(itemState.saleItem.productName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                        Text(itemState.saleItem.productName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
                                         if (!itemState.saleItem.imei.isNullOrBlank()) Text(itemState.saleItem.imei!!, style = MaterialTheme.typography.labelSmall, color = Primary)
                                         Text("Sold: ${itemState.saleItem.quantity} × ${state.currencySymbol} ${CurrencyFormatter.formatRs(itemState.saleItem.unitPrice)}", style = MaterialTheme.typography.labelSmall, color = TextMuted)
                                     }
@@ -308,7 +308,7 @@ private fun ReturnAddDialog(state: SalesReturnState, viewModel: SalesReturnViewM
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Gross Refund", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.grossRefund)}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                                    Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.grossRefund)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onBackground)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Text("Deduction %", style = MaterialTheme.typography.bodySmall, color = TextMuted)
@@ -326,7 +326,7 @@ private fun ReturnAddDialog(state: SalesReturnState, viewModel: SalesReturnViewM
                                 }
                                 HorizontalDivider(color = BorderFaint, thickness = 0.5.dp)
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Net Refund", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    Text("Net Refund", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                                     Text("${state.currencySymbol} ${CurrencyFormatter.formatRs(state.netRefund)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.ExtraBold, color = if (state.netRefund > 0) Success else TextMuted)
                                 }
                             }

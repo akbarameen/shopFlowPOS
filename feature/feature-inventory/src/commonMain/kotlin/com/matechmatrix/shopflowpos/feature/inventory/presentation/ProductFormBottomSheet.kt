@@ -562,7 +562,7 @@ private fun SheetHeader(isEditing: Boolean, onDismiss: () -> Unit) {
                 if (isEditing) "Edit Product" else "New Product",
                 style      = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color      = TextPrimary
+                color      = MaterialTheme.colorScheme.onBackground
             )
             Text(
                 if (isEditing) "Update product details" else "Fill in the product information",
@@ -603,7 +603,7 @@ private fun FormSection(
                     title,
                     style      = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color      = TextPrimary
+                    color      = MaterialTheme.colorScheme.onBackground
                 )
             }
         }

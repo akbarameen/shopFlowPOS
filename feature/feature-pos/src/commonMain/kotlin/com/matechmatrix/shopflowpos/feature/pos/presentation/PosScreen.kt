@@ -137,7 +137,7 @@ private fun PosPhoneLayout(
         ) {
             ProductSearchBar(state, viewModel)
             CategoryFilterRow(state, viewModel)
-            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = true)
+            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = true, state = state)
         }
 
         // Floating cart button
@@ -211,7 +211,7 @@ private fun PosWideLayout(
         ) {
             ProductSearchBar(state, viewModel)
             CategoryFilterRow(state, viewModel)
-            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = false)
+            ProductGrid(pagedProducts = pagedProducts, viewModel = viewModel, compact = false,state=state)
         }
         VerticalDivider(modifier = Modifier.fillMaxHeight().width(1.dp), color = BorderFaint)
         CartPanel(state = state, viewModel = viewModel, modifier = Modifier.weight(0.4f))
@@ -288,7 +288,8 @@ private fun CategoryFilterRow(state: PosState, viewModel: PosViewModel) {
 private fun ProductGrid(
     pagedProducts : LazyPagingItems<Product>,
     viewModel     : PosViewModel,
-    compact       : Boolean
+    compact       : Boolean,
+    state         : PosState,
 ) {
     when (pagedProducts.loadState.refresh) {
         is LoadState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -324,7 +325,8 @@ private fun ProductGrid(
                         PosProductCard(
                             product = product,
                             inCart  = 0, // resolved below — peek is non-null
-                            onClick = { viewModel.onIntent(PosIntent.AddToCart(product)) }
+                            onClick = { viewModel.onIntent(PosIntent.AddToCart(product)) },
+                            state = state
                         )
                     }
                     if (pagedProducts.loadState.append is LoadState.Loading) {
@@ -341,7 +343,7 @@ private fun ProductGrid(
 }
 
 @Composable
-private fun PosProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
+private fun PosProductCard(product: Product, inCart: Int, onClick: () -> Unit,state : PosState) {
     val outOfStock = product.stock <= 0 && !product.isImeiTracked
     Card(
         modifier  = Modifier.fillMaxWidth().aspectRatio(0.85f).clickable(enabled = !outOfStock, onClick = onClick),
@@ -371,7 +373,7 @@ private fun PosProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
                         product.name,
                         style      = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color      = if (outOfStock) TextMuted else TextPrimary,
+                        color      = if (outOfStock) TextMuted else MaterialTheme.colorScheme.onBackground,
                         maxLines   = 2,
                         overflow   = TextOverflow.Ellipsis
                     )
@@ -385,7 +387,7 @@ private fun PosProductCard(product: Product, inCart: Int, onClick: () -> Unit) {
                         )
                     }
                     Text(
-                        CurrencyFormatter.formatRs(product.sellingPrice),
+                        "${state.currencySymbol} ${CurrencyFormatter.formatRs(product.sellingPrice)}",
                         style      = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color      = if (outOfStock) TextMuted else Primary
@@ -455,7 +457,7 @@ private fun CartPanel(state: PosState, viewModel: PosViewModel, modifier: Modifi
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.cart.size, key = { state.cart[it].product.id }) { i ->
-                    CartItemRow(state.cart[i], viewModel)
+                    CartItemRow(state.cart[i], viewModel, state)
                 }
             }
             HorizontalDivider(color = BorderFaint)
@@ -489,10 +491,10 @@ private fun CartPanel(state: PosState, viewModel: PosViewModel, modifier: Modifi
 private fun SummaryRow(label: String, value: String, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = TextPrimary)
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onBackground)
         Text(value, style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (bold) FontWeight.ExtraBold else FontWeight.SemiBold,
-            color = if (bold) Primary else TextPrimary)
+            color = if (bold) Primary else MaterialTheme.colorScheme.onBackground)
     }
 }
 
@@ -501,7 +503,7 @@ private fun SummaryRow(label: String, value: String, bold: Boolean = false) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CartItemRow(item: CartItem, viewModel: PosViewModel) {
+private fun CartItemRow(item: CartItem, viewModel: PosViewModel,state  : PosState,) {
     var showDiscountField by remember(item.product.id) { mutableStateOf(false) }
     var discountInput     by remember(item.product.id) { mutableStateOf(if (item.discount > 0) item.discount.toLong().toString() else "") }
 
@@ -533,7 +535,7 @@ private fun CartItemRow(item: CartItem, viewModel: PosViewModel) {
                     Text(item.product.imei!!, style = MaterialTheme.typography.labelSmall, color = Primary)
                 }
                 Text(
-                    "${CurrencyFormatter.formatRs(item.lineTotal)}",
+                    "${state.currencySymbol} ${CurrencyFormatter.formatRs(item.lineTotal)}",
                     style = MaterialTheme.typography.labelSmall, color = TextMuted
                 )
             }
@@ -626,7 +628,7 @@ private fun CartBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(state.cart.size, key = { state.cart[it].product.id }) { i ->
-                    CartItemRow(state.cart[i], viewModel)
+                    CartItemRow(state.cart[i], viewModel,state)
                 }
             }
             Card(
@@ -907,7 +909,7 @@ private fun CustomerDropdown(state: PosState, viewModel: PosViewModel) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 if (c.phone.isNotBlank()) Text(c.phone, style = MaterialTheme.typography.labelSmall, color = TextMuted)
                                 if (c.outstandingBalance > 0) Text(
-                                    "Due: ${CurrencyFormatter.formatRs(c.outstandingBalance)}",
+                                    "Due: ${state.currencySymbol} ${CurrencyFormatter.formatRs(c.outstandingBalance)}",
                                     style = MaterialTheme.typography.labelSmall, color = Danger, fontWeight = FontWeight.Bold
                                 )
                             }

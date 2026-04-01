@@ -33,7 +33,6 @@ import com.matechmatrix.shopflowpos.core.ui.theme.Danger
 import com.matechmatrix.shopflowpos.core.ui.theme.DangerContainer
 import com.matechmatrix.shopflowpos.core.ui.theme.Primary
 import com.matechmatrix.shopflowpos.core.ui.theme.PrimaryContainer
-import com.matechmatrix.shopflowpos.core.ui.theme.PrimaryLight
 import com.matechmatrix.shopflowpos.core.ui.theme.Success
 import com.matechmatrix.shopflowpos.core.ui.theme.SuccessContainer
 
@@ -59,7 +58,7 @@ fun ProductGridCard(
     ) {
         Box(
             modifier         = Modifier.fillMaxWidth().height(100.dp)
-                .background(Brush.linearGradient(listOf(PrimaryContainer, PrimaryLight))),
+                .background(Brush.linearGradient(listOf(PrimaryContainer, PrimaryContainer))),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Rounded.PhoneAndroid, null,

@@ -119,7 +119,7 @@ fun ReceiptDialog(
                             }
                             Text(
                                 "$currency ${CurrencyFormatter.formatRs(item.lineTotal)}",
-                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary
+                                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }
@@ -201,7 +201,7 @@ fun ReceiptDialog(
 }
 
 @Composable
-private fun ReceiptInfoRow(label: String, value: String, color: Color = TextPrimary, bold: Boolean = false) {
+private fun ReceiptInfoRow(label: String, value: String, color: Color = MaterialTheme.colorScheme.onBackground, bold: Boolean = false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = TextMuted)
         Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.ExtraBold else FontWeight.SemiBold, color = color)

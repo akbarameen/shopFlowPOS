@@ -111,7 +111,7 @@ fun InventoryListCard(
                     product.name,
                     style      = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color      = TextPrimary,
+                    color      = MaterialTheme.colorScheme.onBackground,
                     maxLines   = 1,
                     overflow   = TextOverflow.Ellipsis
                 )
@@ -228,7 +228,7 @@ fun InventoryGridCard(
                 product.name,
                 style      = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color      = TextPrimary,
+                color      = MaterialTheme.colorScheme.onBackground,
                 maxLines   = 2,
                 overflow   = TextOverflow.Ellipsis
             )
