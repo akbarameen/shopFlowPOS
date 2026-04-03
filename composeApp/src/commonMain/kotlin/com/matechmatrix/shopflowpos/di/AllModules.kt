@@ -1,5 +1,6 @@
 package com.matechmatrix.shopflowpos.di
 
+import com.matechmatrix.shopflowpos.feature.backup.di.backupModule
 import com.matechmatrix.shopflowpos.feature.customers.di.customersModule
 import com.matechmatrix.shopflowpos.feature.dashboard.di.dashboardModule
 import com.matechmatrix.shopflowpos.feature.dues.di.duesModule
@@ -35,6 +36,7 @@ val allModules = listOf(
     repairsModule,
     settingsModule,
     purchaseModule,
-    duesModule
+    duesModule,
+    backupModule
 
 )

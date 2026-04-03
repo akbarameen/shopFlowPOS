@@ -1,0 +1,14 @@
+//Backup Work//
+
+for debug sha
+./gradlew signingReport
+
+and for production:
+keytool -list -v -keystore /path/to/your/keystore.jks -alias your_alias_name
+
+
+
+client id : android : 24610218503-vi7an3vv823knmfqo6tsds3sspemgd8h.apps.googleusercontent.com
+
+
+client id : desktop: 24610218503-f9bc5bt4qcvqbi01nqs3g2fape8h1v6o.apps.googleusercontent.com
